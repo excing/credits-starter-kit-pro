@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **production-ready SaaS starter kit** built with SvelteKit 5, featuring complete authentication, subscription management, AI integration, and modern UI components. The project is designed to help developers launch SaaS applications quickly with all essential features pre-configured.
+This is a **production-ready SaaS starter kit** built with SvelteKit 5, featuring complete authentication, AI integration, file storage, and modern UI components. The project is designed to help developers launch SaaS applications quickly with all essential features pre-configured.
 
 ### Tech Stack
 
@@ -12,8 +12,7 @@ This is a **production-ready SaaS starter kit** built with SvelteKit 5, featurin
 - **Language**: TypeScript (strict mode)
 - **Styling**: Tailwind CSS v4 + shadcn-svelte
 - **Database**: Neon PostgreSQL + Drizzle ORM
-- **Authentication**: Better Auth with Polar plugin
-- **Payments**: Polar.sh (sandbox mode by default)
+- **Authentication**: Better Auth
 - **AI**: Vercel AI SDK + OpenAI
 - **Storage**: Cloudflare R2 (S3-compatible)
 - **Email**: Resend
@@ -26,7 +25,7 @@ This is a **production-ready SaaS starter kit** built with SvelteKit 5, featurin
 - **179 source files** (Svelte + TypeScript)
 - **~5,800 lines of code**
 - **15 page routes** + **5 API endpoints**
-- **7 database tables**
+- **5 database tables**
 
 ## Development Commands
 
@@ -64,7 +63,7 @@ Configured in `svelte.config.js`:
 
 ### Authentication Flow
 
-Authentication is handled by Better Auth with the Polar plugin:
+Authentication is handled by Better Auth:
 
 **Configuration:** `src/lib/server/auth.ts` (16,739 lines of configuration)
 
@@ -87,7 +86,6 @@ Authentication is handled by Better Auth with the Polar plugin:
 2. Session stored in `event.locals.session`
 3. Protected routes redirect unauthenticated users to `/sign-in`
 4. Auth routes redirect authenticated users to `/dashboard`
-5. Webhook endpoint `/api/auth/polar/webhooks` bypasses auth
 
 **Security Features:**
 - Database-backed sessions with expiration
@@ -95,7 +93,6 @@ Authentication is handled by Better Auth with the Polar plugin:
 - Email verification required
 - Password requirements: 8-128 characters
 - CORS protection with trusted origins
-- Webhook signature verification
 
 ### Database Schema
 
@@ -106,47 +103,13 @@ Located in `src/lib/server/db/schema.ts`:
 2. **session** - Session management (id, token, expiresAt, userId, ipAddress, userAgent)
 3. **account** - OAuth provider accounts (accountId, providerId, tokens, scope)
 4. **verification** - Email verification tokens (identifier, value, expiresAt)
-5. **subscription** - Polar subscription data (status, amount, currency, billing info, metadata)
-6. **order** - One-time purchases (status, amounts, product info, billing details)
-7. **rate_limit** - Rate limiting storage (key, count, last_request)
+5. **rate_limit** - Rate limiting storage (key, count, last_request)
 
 **Migrations:**
-- `0000_magical_typhoid_mary.sql` - Initial schema (user, session, account, verification, subscription)
+- `0000_magical_typhoid_mary.sql` - Initial schema (user, session, account, verification)
 - `0001_flimsy_roulette.sql` - Rate limit table
-- `0002_jittery_brother_voodoo.sql` - Order table
 
 **Connection:** `src/lib/server/db/index.ts` uses Neon serverless driver with Drizzle ORM
-
-### Subscription Management
-
-The app integrates Polar.sh for subscription payments:
-
-**Configuration:** Better Auth Polar plugin in `src/lib/server/auth.ts` (lines 119-310)
-
-**Features:**
-- Subscription management with Polar.sh
-- Real-time webhook processing for subscription events
-- Customer portal for self-service billing
-- Subscription status tracking (active, canceled, expired)
-- Payment gating with elegant overlays
-- One-time product purchases (orders)
-
-**Webhook Events Handled:**
-- `subscription.created`, `subscription.active`, `subscription.updated`
-- `subscription.canceled`, `subscription.revoked`, `subscription.uncanceled`
-- `order.created`, `order.paid`, `order.updated`
-
-**Helper Functions** (`src/lib/server/subscription.ts`):
-- `getSubscriptionDetails(event)` - Get user's subscription with status
-- `isUserSubscribed(event)` - Check if user has active subscription
-- `hasAccessToProduct(event, productId)` - Check access to specific product
-- `getUserSubscriptionStatus(event)` - Get status: 'active' | 'canceled' | 'expired' | 'none'
-
-**Environment Variables:**
-- `POLAR_ENVIRONMENT` - 'sandbox' or 'production'
-- `POLAR_ACCESS_TOKEN` - Polar API access token
-- `POLAR_WEBHOOK_SECRET` - Webhook signature verification
-- `PUBLIC_STARTER_TIER` - Subscription product ID
 
 ### AI Chat Integration
 
@@ -218,9 +181,8 @@ The app integrates Polar.sh for subscription payments:
 **Custom Components:**
 - `src/lib/components/homepage/` - HeroSection, Integrations showcase, Footer
 - `src/lib/components/dashboard/` - Sidebar, Navbar, SectionCards (stats), ChartInteractive (bar chart)
-- `src/lib/components/pricing/` - PricingTable with subscription status
 - `src/lib/components/common/` - GetStartedButton (auth-aware), UserProfile (dropdown menu)
-- `src/lib/components/logos/` - SvelteKit, BetterAuth, Neon, Polar, Tailwind, shadcn-svelte
+- `src/lib/components/logos/` - SvelteKit, BetterAuth, Neon, Tailwind, shadcn-svelte
 
 **Design Approach:**
 - shadcn-svelte components (Bits UI primitives + Tailwind CSS)
@@ -232,8 +194,7 @@ The app integrates Polar.sh for subscription payments:
 ### Route Structure
 
 #### Public Pages
-- `/` - Landing page (hero, integrations, pricing, footer)
-- `/pricing` - Pricing page with subscription tiers
+- `/` - Landing page (hero, integrations, footer)
 - `/(legal)/privacy-policy` - Privacy policy
 - `/(legal)/terms-of-service` - Terms of service
 
@@ -243,20 +204,15 @@ The app integrates Polar.sh for subscription payments:
 - `/forgot-password` - Password reset request
 - `/reset-password` - Password reset with token validation
 - `/verify-email` - Email verification with countdown timer
-- `/success` - Post-checkout success page with confetti animation
 
 #### Protected Dashboard Pages (require authentication)
 - `/dashboard` - Overview with stats cards and interactive chart
 - `/dashboard/chat` - AI chat interface with streaming responses
 - `/dashboard/upload` - File upload to Cloudflare R2 with drag-and-drop
-- `/dashboard/payment` - Subscription management (payment-gated)
-- `/dashboard/settings` - Profile management + billing history
+- `/dashboard/settings` - Profile management
 
 #### API Endpoints
 - `/api/auth/[...all]` - Better Auth API routes (sign-in, sign-up, sign-out, etc.)
-- `/api/auth/polar/webhooks` - Polar webhook endpoint (bypasses authentication)
-- `/api/subscription/details` - Fetch user's subscription details
-- `/api/orders` - Fetch user's order history
 - `/api/chat` - Stream AI chat responses
 - `/api/upload-image` - Upload image to Cloudflare R2
 
@@ -269,12 +225,6 @@ The app integrates Polar.sh for subscription payments:
 - `authLoaded` - Whether auth state is initialized
 - `authLoading` - Whether auth is being refreshed
 - Functions: `setCurrentUser()`, `initAuthFromLayout()`, `patchCurrentUser()`, `clearAuthState()`, `refreshCurrentUser()`, `ensureCurrentUserLoaded()`
-
-**Subscription Store** (`src/lib/stores/subscription.ts`):
-- `subscriptionDetails` - User's subscription info
-- `subscriptionLoaded` - Whether subscription data is loaded
-- `subscriptionLoading` - Whether subscription is being fetched
-- Functions: `setSubscriptionDetails()`, `resetSubscriptionDetails()`, `refreshSubscriptionDetails()`, `ensureSubscriptionDetailsLoaded()`
 
 ## Important Notes
 
@@ -292,12 +242,6 @@ Required environment variables (see `.env`):
 - `BETTER_AUTH_SECRET` - Auth encryption secret
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` - Google OAuth credentials
 
-**Payments (Polar):**
-- `POLAR_ENVIRONMENT` - 'sandbox' or 'production'
-- `POLAR_ACCESS_TOKEN` - Polar API access token
-- `POLAR_WEBHOOK_SECRET` - Webhook signature verification
-- `PUBLIC_STARTER_TIER` - Subscription product ID
-
 **AI:**
 - `OPENAI_API_KEY` - OpenAI API key
 - `OPENAI_BASE_URL` - OpenAI API base URL (default: https://api.openai.com/v1)
@@ -313,17 +257,9 @@ Required environment variables (see `.env`):
 - `R2_UPLOAD_IMAGE_BUCKET_NAME` - R2 bucket name
 - `R2_PUBLIC_URL` - R2 public URL (needs to be configured)
 
-### Polar Configuration
-
-The Polar client is configured in **sandbox mode** (`src/lib/server/auth.ts:24`). Change to production when deploying.
-
 ### Session Caching
 
 Better Auth session caching is enabled with a 5-minute TTL to reduce database queries.
-
-### Webhook Processing
-
-Subscription webhooks intentionally don't throw errors on failure to avoid webhook retries. Errors are logged but the webhook returns success.
 
 ### Database Migrations
 
@@ -342,14 +278,6 @@ For rapid development, use `npx drizzle-kit push` to push schema changes directl
 3. Session created and cached for 5 minutes
 4. Protected routes check `event.locals.session`
 5. Unauthenticated users redirected to `/sign-in`
-
-### Subscription Workflow
-1. User clicks "Get Started" or "Subscribe"
-2. Redirected to Polar checkout
-3. After payment, webhook updates subscription table
-4. User redirected to `/success` page with confetti
-5. Subscription status checked on dashboard pages
-6. Payment-gated features show overlay if not subscribed
 
 ### File Upload Workflow
 1. User drags/drops or selects image
@@ -415,16 +343,9 @@ For rapid development, use `npx drizzle-kit push` to push schema changes directl
 - Test email verification flow
 - Verify rate limiting works correctly
 
-### When Working with Subscriptions
-- Test webhook handling in sandbox mode
-- Verify subscription status updates correctly
-- Test payment gating on protected features
-- Check customer portal integration
-
 ### Security Considerations
 - Never commit `.env` file
 - Always validate user input
 - Use parameterized queries (Drizzle handles this)
-- Verify webhook signatures
 - Implement rate limiting for sensitive operations
 - Sanitize file uploads
