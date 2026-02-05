@@ -65,19 +65,19 @@
 
 ## 📦 已创建的文件
 
-### 新建文件（15个）
+### 新建文件（14个）
 1. `src/lib/server/credits.ts` - 核心积分服务
 2. `src/lib/server/credits-middleware.ts` - 积分中间件
 3. `src/lib/server/rate-limit.ts` - 速率限制
-4. `src/lib/server/db/seed-credits.ts` - 种子数据脚本
-5. `src/lib/server/db/generate-code.ts` - 生成兑换码脚本
-6. `src/routes/api/user/credits/+server.ts` - 获取余额 API
-7. `src/routes/api/user/credits/packages/+server.ts` - 获取套餐 API
-8. `src/routes/api/user/credits/history/+server.ts` - 交易历史 API
-9. `src/routes/api/user/credits/redeem/+server.ts` - 兑换码 API
-10. `src/routes/api/admin/credits/packages/+server.ts` - 管理员套餐 API
-11. `src/routes/api/admin/credits/generate-code/+server.ts` - 生成兑换码 API
-12. `src/routes/dashboard/credits/+page.svelte` - 积分管理页面
+4. `src/routes/api/user/credits/+server.ts` - 获取余额 API
+5. `src/routes/api/user/credits/packages/+server.ts` - 获取套餐 API
+6. `src/routes/api/user/credits/history/+server.ts` - 交易历史 API
+7. `src/routes/api/user/credits/redeem/+server.ts` - 兑换码 API
+8. `src/routes/api/admin/credits/packages/+server.ts` - 管理员套餐 API
+9. `src/routes/api/admin/credits/packages/[id]/+server.ts` - 管理员套餐编辑/删除 API
+10. `src/routes/api/admin/credits/generate-code/+server.ts` - 生成兑换码 API
+11. `src/routes/dashboard/credits/+page.svelte` - 积分管理页面
+12. `src/routes/dashboard/admin/+page.svelte` - 管理员控制台
 13. `CREDITS_IMPLEMENTATION.md` - 完整实现文档
 14. `CREDITS_README.md` - 使用指南
 15. `CREDITS_SUMMARY.md` - 本总结文档
@@ -95,49 +95,46 @@
 
 ## 🚀 快速开始
 
-### 1. 初始化数据库
-```bash
-npx tsx src/lib/server/db/seed-credits.ts
-```
-
-### 2. 配置管理员
+### 1. 配置管理员
 在 `.env` 文件中：
 ```env
-ADMIN_EMAILS=admin@blendiv.com
+ADMIN_EMAILS=admin@example.com
 INITIAL_CREDITS=100
 ```
 
-### 3. 生成测试兑换码
-```bash
-npx tsx src/lib/server/db/generate-code.ts
-```
+### 2. 创建积分套餐
+1. 启动应用：`npm run dev`
+2. 访问 http://localhost:3000
+3. 使用管理员账号登录
+4. 访问 `/dashboard/admin` 管理员控制台
+5. 点击"创建套餐"按钮，创建积分套餐
 
-已生成的测试兑换码：
-- **新手礼包** (100积分, 90天有效): `a1815c92-27fc-4dfe-b1cf-8814ad60325c`
-- **基础套餐** (500积分, 180天有效, 可用3次): `0f1e8295-70e3-4205-a4ba-88625c3277a6`
-- **专业套餐** (2000积分, 365天有效): `0ebefba9-083c-43b3-bf90-bdea3452f08d`
+**建议的初始套餐**：
+- **新手礼包**：100积分，90天有效，免费
+- **基础套餐**：500积分，180天有效，¥49
+- **专业套餐**：2000积分，365天有效，¥199
 
-### 4. 启动应用
-```bash
-npm run dev
-```
+### 3. 生成兑换码
+1. 在管理员控制台点击"生成兑换码"
+2. 选择套餐、设置使用次数和过期时间
+3. 复制生成的兑换码，分发给用户
 
-访问 http://localhost:3000
+## 📊 建议配置
 
-## 📊 默认配置
+### 积分套餐（需手动创建）
+| 套餐名称 | 积分数 | 有效期 | 价格 |
+|---------|--------|--------|------|
+| 新手礼包 | 100 | 90天 | 免费 |
+| 基础套餐 | 500 | 180天 | ¥49 |
+| 专业套餐 | 2000 | 365天 | ¥199 |
 
-### 积分套餐
-| 套餐名称 | 积分数 | 有效期 | 价格 | 套餐ID |
-|---------|--------|--------|------|--------|
-| 新手礼包 | 100 | 90天 | 免费 | pkg-welcome |
-| 基础套餐 | 500 | 180天 | ¥49 | pkg-basic |
-| 专业套餐 | 2000 | 365天 | ¥199 | pkg-pro |
-
-### 计费配置
+### 计费配置（需手动配置）
 | 操作类型 | 计费方式 | 费用 |
 |---------|---------|------|
 | AI 聊天 | 按 token | 1 积分/1000 tokens |
 | 图片生成 | 固定 | 5 积分/张 |
+
+**配置方法**：直接在数据库的 `operation_cost` 表中插入记录
 
 ## 🎮 用户使用流程
 
@@ -149,24 +146,26 @@ npm run dev
 
 ## 🔧 管理员操作
 
+### 创建套餐
+1. 访问 `/dashboard/admin` 管理员控制台
+2. 点击"创建套餐"按钮
+3. 填写套餐信息并保存
+
 ### 生成兑换码
-```bash
-# 使用脚本生成
-npx tsx src/lib/server/db/generate-code.ts
+1. 在管理员控制台点击"生成兑换码"
+2. 选择套餐、设置参数
+3. 批量生成（最多100个）
+4. 复制兑换码分发给用户
 
-# 或通过 API
-POST /api/admin/credits/generate-code
-{
-  "packageId": "pkg-welcome",
-  "maxUses": 1,
-  "codeExpiresInDays": 30
-}
-```
+### 管理套餐
+- 编辑套餐：点击套餐列表中的编辑按钮
+- 删除套餐：点击套餐列表中的删除按钮
+- 启用/禁用套餐：在编辑对话框中切换状态
 
-### 查看所有套餐
-```bash
-GET /api/admin/credits/packages
-```
+### 管理兑换码
+- 查看所有兑换码及使用情况
+- 启用/禁用兑换码
+- 删除兑换码
 
 ## 📈 核心特性详解
 

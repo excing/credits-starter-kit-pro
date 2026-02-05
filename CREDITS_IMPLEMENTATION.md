@@ -57,9 +57,22 @@
 ### 5. 用户初始化 ✅
 - ✅ 修改了 `hooks.server.ts`，自动为新用户发放欢迎套餐（100积分，90天有效）
 
-### 6. 工具脚本 ✅
-- ✅ `src/lib/server/db/seed-credits.ts` - 种子数据脚本
-- ✅ `src/lib/server/db/generate-code.ts` - 生成兑换码示例脚本
+### 6. 管理员控制台 ✅
+
+#### `src/routes/dashboard/admin/+page.svelte` - 管理员控制台
+
+**用途**：管理员管理积分套餐和兑换码
+
+**功能**：
+- 创建、编辑、删除积分套餐
+- 批量生成兑换码（最多100个）
+- 查看和管理所有兑换码
+- 启用/禁用兑换码
+- 查看兑换码使用情况
+
+**访问方式**：
+- 访问 `/dashboard/admin`
+- 需要管理员权限（ADMIN_EMAILS 环境变量）
 
 ## 核心特性
 
@@ -88,18 +101,36 @@
 
 ## 使用指南
 
-### 1. 生成兑换码
-```bash
-npx tsx src/lib/server/db/generate-code.ts
-```
+### 1. 配置管理员
 
-### 2. 配置管理员
 在 `.env` 文件中添加：
 ```env
 ADMIN_EMAILS=admin@example.com,admin2@example.com
 ```
 
-### 3. 用户使用流程
+### 2. 创建积分套餐
+
+管理员需要手动创建积分套餐：
+
+1. 访问 `/dashboard/admin` 管理员控制台
+2. 点击"创建套餐"按钮
+3. 填写套餐信息并保存
+
+**建议的初始套餐**：
+- **新手礼包**：100积分，90天有效，免费
+- **基础套餐**：500积分，180天有效，¥49
+- **专业套餐**：2000积分，365天有效，¥199
+
+### 3. 生成兑换码
+
+在管理员控制台生成兑换码：
+
+1. 点击"生成兑换码"按钮
+2. 选择套餐、设置使用次数和过期时间
+3. 批量生成（最多100个）
+4. 复制兑换码分发给用户
+
+### 4. 用户使用流程
 1. 注册账号 → 自动获得 100 积分（90天有效）
 2. 访问 `/dashboard/credits` 查看余额
 3. 点击"兑换积分"输入兑换码
@@ -108,24 +139,27 @@ ADMIN_EMAILS=admin@example.com,admin2@example.com
 
 ### 4. 管理员操作
 1. 配置 ADMIN_EMAILS 环境变量
-2. 使用脚本生成兑换码或调用 API
-3. 分发兑换码给用户
+2. 访问 `/dashboard/admin` 控制台
+3. 创建积分套餐
+4. 生成兑换码并分发给用户
 
 ## 文件清单
 
-### 新建文件（15个）
-1. `src/lib/server/credits.ts`
-2. `src/lib/server/credits-middleware.ts`
-3. `src/lib/server/rate-limit.ts`
-4. `src/lib/server/db/seed-credits.ts`
-5. `src/lib/server/db/generate-code.ts`
-6. `src/routes/api/user/credits/+server.ts`
-7. `src/routes/api/user/credits/packages/+server.ts`
-8. `src/routes/api/user/credits/history/+server.ts`
-9. `src/routes/api/user/credits/redeem/+server.ts`
-10. `src/routes/api/admin/credits/packages/+server.ts`
-11. `src/routes/api/admin/credits/generate-code/+server.ts`
-12. `src/routes/dashboard/credits/+page.svelte`
+### 新建文件（14个）
+1. `src/lib/server/credits.ts` - 核心积分服务
+2. `src/lib/server/credits-middleware.ts` - 积分中间件
+3. `src/lib/server/rate-limit.ts` - 速率限制工具
+4. `src/routes/api/user/credits/+server.ts` - 获取余额 API
+5. `src/routes/api/user/credits/packages/+server.ts` - 获取套餐 API
+6. `src/routes/api/user/credits/history/+server.ts` - 交易历史 API
+7. `src/routes/api/user/credits/redeem/+server.ts` - 兑换码 API
+8. `src/routes/api/admin/credits/packages/+server.ts` - 管理员套餐 API
+9. `src/routes/api/admin/credits/packages/[id]/+server.ts` - 管理员套餐编辑/删除 API
+10. `src/routes/api/admin/credits/generate-code/+server.ts` - 生成兑换码 API
+11. `src/routes/api/admin/credits/codes/+server.ts` - 兑换码管理 API
+12. `src/routes/api/admin/credits/codes/[id]/+server.ts` - 兑换码编辑/删除 API
+13. `src/routes/dashboard/credits/+page.svelte` - 积分管理页面
+14. `src/routes/dashboard/admin/+page.svelte` - 管理员控制台
 
 ### 修改文件（8个）
 1. `src/lib/server/db/schema.ts` - 添加 6 个新表
