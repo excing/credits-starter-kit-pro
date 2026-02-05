@@ -160,14 +160,6 @@ export const redemptionHistory = pgTable('redemption_history', {
     redeemedAt: timestamp('redeemed_at').notNull().defaultNow()
 });
 
-// 7. Operation Cost - 操作计费配置表
-export const operationCost = pgTable('operation_cost', {
-    id: text('id').primaryKey(),
-    operationType: text('operation_type').notNull().unique(),
-    costType: text('cost_type').notNull(),
-    costAmount: integer('cost_amount').notNull(),
-    costPer: integer('cost_per').default(1000),
-    isActive: boolean('is_active').notNull().default(true),
-    metadata: text('metadata'),
-    updatedAt: timestamp('updated_at').notNull().defaultNow()
-});
+// 注意：operation_cost 表已移除
+// 计费配置现在使用 TypeScript 常量（src/lib/server/operation-costs.config.ts）
+// 这样可以实现零运行时开销，完美适配无服务器环境

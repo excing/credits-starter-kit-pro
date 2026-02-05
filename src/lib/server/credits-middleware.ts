@@ -56,8 +56,8 @@ export async function checkCreditsMiddleware(
         return { allowed: true };
     }
 
-    // 获取计费配置
-    const costConfig = await getOperationCost(options.operationType);
+    // 获取计费配置（现在是同步操作，从 TypeScript 常量获取）
+    const costConfig = getOperationCost(options.operationType);
 
     if (!costConfig) {
         console.error(`未找到操作类型的计费配置: ${options.operationType}`);
@@ -104,7 +104,7 @@ export async function deductCreditsAfterOperation(
     actualTokens: number,
     metadata?: Record<string, any>
 ): Promise<void> {
-    const costConfig = await getOperationCost(operationType);
+    const costConfig = getOperationCost(operationType);
 
     if (!costConfig) {
         console.warn(`未找到操作类型 ${operationType} 的计费配置，跳过扣费`);
@@ -211,8 +211,8 @@ export async function postDeductCredits(
 ): Promise<void> {
     const { userId, operationType } = context;
 
-    // 获取计费配置
-    const costConfig = await getOperationCost(operationType);
+    // 获取计费配置（现在是同步操作，从 TypeScript 常量获取）
+    const costConfig = getOperationCost(operationType);
 
     if (!costConfig) {
         console.warn(`⚠️ 未找到操作类型 '${operationType}' 的计费配置，跳过扣费`);

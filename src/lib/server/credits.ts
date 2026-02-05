@@ -4,11 +4,11 @@ import {
     userCreditPackage,
     creditTransaction,
     redemptionCode,
-    redemptionHistory,
-    operationCost
+    redemptionHistory
 } from './db/schema';
 import { eq, and, lt, gt, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
+import { getOperationCost, type OperationCostConfig } from './operation-costs.config';
 
 // Types
 export type TransactionType =
@@ -20,12 +20,8 @@ export type TransactionType =
     | 'admin_adjustment'
     | 'refund';
 
-export interface OperationCostConfig {
-    operationType: string;
-    costType: 'fixed' | 'per_token' | 'per_unit';
-    costAmount: number;
-    costPer: number;
-}
+// Re-export OperationCostConfig for backward compatibility
+export type { OperationCostConfig };
 
 // Error classes
 export class InsufficientCreditsError extends Error {
@@ -358,28 +354,11 @@ export async function redeemCode(
 
 /**
  * 获取操作计费配置
+ *
+ * 注意：此函数现在从 TypeScript 常量获取配置，而不是数据库
+ * 这样可以实现零运行时开销，完美适配无服务器环境
  */
-export async function getOperationCost(operationType: string): Promise<OperationCostConfig | null> {
-    const [cost] = await db
-        .select()
-        .from(operationCost)
-        .where(
-            and(
-                eq(operationCost.operationType, operationType),
-                eq(operationCost.isActive, true)
-            )
-        )
-        .limit(1);
-
-    if (!cost) return null;
-
-    return {
-        operationType: cost.operationType,
-        costType: cost.costType as 'fixed' | 'per_token' | 'per_unit',
-        costAmount: cost.costAmount,
-        costPer: cost.costPer ?? 1
-    };
-}
+export { getOperationCost };
 
 /**
  * 计算 token 费用
