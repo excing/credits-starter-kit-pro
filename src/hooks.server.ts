@@ -1,5 +1,6 @@
 import { auth } from '$lib/server/auth';
 import { redirect, type Handle } from '@sveltejs/kit';
+import { initializeUserCredits } from '$lib/server/credits';
 
 export const handle: Handle = async ({ event, resolve }) => {
     // Get session from Better Auth
@@ -7,6 +8,15 @@ export const handle: Handle = async ({ event, resolve }) => {
     event.locals.session = session;
 
     const { pathname } = event.url;
+
+    // Initialize credits for new users
+    if (session?.user?.id) {
+        try {
+            await initializeUserCredits(session.user.id);
+        } catch (error) {
+            console.error('Failed to initialize user credits:', error);
+        }
+    }
 
     // Redirect authenticated users away from auth pages
     if (session?.user && ['/sign-in', '/sign-up'].includes(pathname)) {

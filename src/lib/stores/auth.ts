@@ -7,6 +7,8 @@ export type AuthUser = {
 	name?: string | null;
 	email: string;
 	image?: string | null;
+	credits?: number; // 总余额
+	activePackages?: number; // 有效套餐数量
 	[key: string]: unknown;
 };
 
@@ -91,4 +93,25 @@ export async function ensureCurrentUserLoaded(): Promise<AuthUser | null> {
 		inFlight = null;
 	});
 	return inFlight;
+}
+
+/**
+ * 刷新用户积分余额
+ */
+export async function refreshUserCredits(): Promise<void> {
+	const user = get(_user);
+	if (!user) return;
+
+	try {
+		const response = await fetch('/api/user/credits');
+		if (response.ok) {
+			const { balance, activePackages } = await response.json();
+			patchCurrentUser({
+				credits: balance,
+				activePackages: activePackages
+			});
+		}
+	} catch (error) {
+		console.error('Failed to refresh credits:', error);
+	}
 }

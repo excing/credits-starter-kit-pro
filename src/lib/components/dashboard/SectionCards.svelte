@@ -7,38 +7,66 @@
         DollarSign,
         Activity,
         CreditCard,
+        Coins,
+        Package,
+        MessageCircle,
     } from "lucide-svelte";
+    import { currentUser } from "$lib/stores/auth";
+    import { onMount } from "svelte";
 
-    const cards = [
+    let stats = $state<any>(null);
+    let loading = $state(true);
+
+    // 加载统计数据
+    async function loadStats() {
+        try {
+            const res = await fetch("/api/user/credits/stats");
+            if (res.ok) {
+                stats = await res.json();
+            }
+        } catch (error) {
+            console.error("加载统计失败:", error);
+        } finally {
+            loading = false;
+        }
+    }
+
+    onMount(() => {
+        loadStats();
+    });
+
+    const cards = $derived([
         {
-            title: "Total Revenue",
-            value: "$45,231.89",
-            change: "+20.1%",
+            title: "可用积分",
+            value: $currentUser?.credits?.toString() ?? "0",
+            change: "查看详情",
             trending: "up",
-            icon: DollarSign,
+            icon: Coins,
+            href: "/dashboard/credits",
         },
         {
-            title: "Subscriptions",
-            value: "+2,350",
-            change: "+180.1%",
-            trending: "up",
-            icon: Users,
+            title: "有效套餐",
+            value: $currentUser?.activePackages?.toString() ?? "0",
+            change: "个套餐",
+            trending: "neutral",
+            icon: Package,
+            href: "/dashboard/credits",
         },
         {
-            title: "Sales",
-            value: "+12,234",
-            change: "+19%",
-            trending: "up",
-            icon: CreditCard,
-        },
-        {
-            title: "Active Now",
-            value: "+573",
-            change: "+201",
-            trending: "up",
+            title: "总消费",
+            value: stats?.totalSpent?.toString() ?? "0",
+            change: "积分",
+            trending: "neutral",
             icon: Activity,
         },
-    ];
+        {
+            title: "总获得",
+            value: stats?.totalEarned?.toString() ?? "0",
+            change: "积分",
+            trending: "neutral",
+            icon: TrendingUp,
+        },
+    ]);
 </script>
 
 <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -52,21 +80,19 @@
                 <card.icon class="text-muted-foreground h-4 w-4" />
             </Card.Header>
             <Card.Content>
-                <div class="text-2xl font-bold">{card.value}</div>
-                <div class="text-muted-foreground flex items-center text-xs">
-                    {#if card.trending === "up"}
-                        <TrendingUp class="mr-1 h-3 w-3 text-green-500" />
+                {#if loading}
+                    <div class="h-8 w-24 bg-muted animate-pulse rounded"></div>
+                {:else}
+                    <div class="text-2xl font-bold">{card.value}</div>
+                {/if}
+                <div class="text-muted-foreground flex items-center text-xs mt-1">
+                    {#if card.href}
+                        <a href={card.href} class="text-primary hover:underline">
+                            {card.change} →
+                        </a>
                     {:else}
-                        <TrendingDown class="mr-1 h-3 w-3 text-red-500" />
+                        <span>{card.change}</span>
                     {/if}
-                    <span
-                        class={card.trending === "up"
-                            ? "text-green-500"
-                            : "text-red-500"}
-                    >
-                        {card.change}
-                    </span>
-                    <span class="ml-1">from last month</span>
                 </div>
             </Card.Content>
         </Card.Root>

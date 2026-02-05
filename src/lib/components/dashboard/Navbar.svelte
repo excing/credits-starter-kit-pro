@@ -9,7 +9,12 @@
         MonitorSmartphone,
         GitBranch,
         Menu,
+        Coins,
+        ShieldCheck,
     } from "lucide-svelte";
+    import { currentUser, refreshUserCredits } from "$lib/stores/auth";
+    import { onMount } from "svelte";
+    import { page } from "$app/stores";
 
     import type { Snippet } from "svelte";
 
@@ -19,6 +24,14 @@
 
     let { children }: Props = $props();
     let sheetOpen = $state(false);
+
+    // 刷新积分余额
+    onMount(() => {
+        refreshUserCredits();
+    });
+
+    // 从服务端获取管理员状态
+    const isAdmin = $derived($page.data.isAdmin ?? false);
 </script>
 
 <div class="flex flex-col">
@@ -60,7 +73,27 @@
                             Upload
                         </Button>
                     </a>
+                    <a
+                        href="/dashboard/credits"
+                        onclick={() => (sheetOpen = false)}
+                    >
+                        <Button variant="outline" class="w-full">
+                            <Coins class="mr-2 h-4 w-4" />
+                            Credits
+                        </Button>
+                    </a>
                     <Separator class="my-3" />
+                    {#if isAdmin}
+                        <a
+                            href="/dashboard/admin"
+                            onclick={() => (sheetOpen = false)}
+                        >
+                            <Button variant="outline" class="w-full">
+                                <ShieldCheck class="mr-2 h-4 w-4" />
+                                Admin
+                            </Button>
+                        </a>
+                    {/if}
                     <a
                         href="/dashboard/settings"
                         onclick={() => (sheetOpen = false)}
@@ -74,6 +107,14 @@
             </Sheet.Content>
         </Sheet.Root>
         <div class="ml-auto flex items-center justify-center gap-2">
+            <!-- 积分显示 -->
+            <a
+                href="/dashboard/credits"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
+            >
+                <Coins class="h-4 w-4 text-primary" />
+                <span class="text-sm font-medium">{$currentUser?.credits ?? 0}</span>
+            </a>
             <UserProfile mini={true} />
         </div>
     </header>
