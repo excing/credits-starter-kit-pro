@@ -2,9 +2,12 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { streamText, convertToModelMessages } from 'ai';
 import type { RequestHandler } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { json } from '@sveltejs/kit';
-import { getUserBalance, deductCredits, getOperationCost, calculateTokenCost } from '$lib/server/credits';
-import { encoding_for_model } from 'tiktoken';
+import { preCheckCredits, postDeductCredits } from '$lib/server/credits-middleware';
+import {
+    estimateTokens,
+    estimateMessagesTokens,
+    extractTokenUsage
+} from '$lib/server/token-utils';
 
 // 创建自定义 OpenAI provider，支持自定义 baseURL
 const openai = createOpenAI({
@@ -12,63 +15,21 @@ const openai = createOpenAI({
     apiKey: env.OPENAI_API_KEY,
 });
 
-/**
- * 估算文本的 token 数量
- * 优先使用 tiktoken，降级到简单估算
- */
-function estimateTokens(text: string, model: string = 'gpt-5'): number {
-    try {
-        // 尝试使用 tiktoken 精确计算
-        const encoder = encoding_for_model(model as any);
-        const tokens = encoder.encode(text);
-        encoder.free();
-        return tokens.length;
-    } catch (error) {
-        // 降级到简单估算：英文约 4 字符 = 1 token，中文约 1.5 字符 = 1 token
-        // 使用保守估算：平均 3 字符 = 1 token
-        return Math.ceil(text.length / 3);
-    }
-}
+export const POST: RequestHandler = async (event) => {
+    // 1. 前置检查：认证 + 积分余额
+    const preCheck = await preCheckCredits(event, {
+        operationType: 'chat_usage',
+        minCreditsRequired: 1
+    });
 
-/**
- * 从消息数组估算总 token 数
- */
-function estimateMessagesTokens(messages: any[], model: string = 'gpt-5'): { inputTokens: number; outputTokens: number } {
-    let inputTokens = 0;
-
-    // 计算输入消息的 token
-    for (const msg of messages) {
-        const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-        inputTokens += estimateTokens(content, model);
-        // 每条消息额外增加 4 个 token（消息格式开销）
-        inputTokens += 4;
+    if (!preCheck.success) {
+        return preCheck.error;
     }
 
-    // 基础开销：每次请求约 3 个 token
-    inputTokens += 3;
+    const creditContext = preCheck.context;
 
-    return { inputTokens, outputTokens: 0 };
-}
-
-export const POST: RequestHandler = async ({ request, locals, platform }) => {
-    // 1. 认证检查
-    const userId = locals.session?.user?.id;
-    if (!userId) {
-        return json({ error: '未授权，请先登录' }, { status: 401 });
-    }
-
-    // 2. 预检查余额（至少需要1积分）
-    const balance = await getUserBalance(userId);
-    if (balance < 1) {
-        return json({
-            error: '积分不足',
-            code: 'INSUFFICIENT_CREDITS',
-            balance: 0
-        }, { status: 402 });
-    }
-
-    // 3. 执行 AI 流式响应
-    const { messages } = await request.json();
+    // 2. 执行 AI 流式响应
+    const { messages } = await event.request.json();
     const modelMessages = await convertToModelMessages(messages);
     const modelName = env.OPENAI_MODEL || 'gemini-3-flash-preview';
 
@@ -92,8 +53,9 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
                 if (usage && (usage.inputTokens || usage.outputTokens)) {
                     // 方案 A: 使用 API 返回的精确 usage
-                    inputTokens = usage.inputTokens || 0;
-                    outputTokens = usage.outputTokens || 0;
+                    const tokenUsage = extractTokenUsage(usage);
+                    inputTokens = tokenUsage.inputTokens;
+                    outputTokens = tokenUsage.outputTokens;
                     estimationMethod = 'api_usage';
                 } else {
                     // 方案 B: 使用 tiktoken 估算
@@ -111,35 +73,17 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
                 const totalTokens = inputTokens + outputTokens;
 
-                // 如果没有 token 使用量，跳过扣费
-                if (totalTokens === 0) {
-                    console.log(`⚠️ 用户 ${userId} 的请求没有 token 使用量，跳过扣费`);
-                    return;
-                }
-
-                const costConfig = await getOperationCost('chat');
-
-                if (costConfig) {
-                    const creditsToDeduct = calculateTokenCost(totalTokens, costConfig);
-
-                    await deductCredits(
-                        userId,
-                        creditsToDeduct,
-                        'chat_usage',
-                        {
-                            model: modelName,
-                            inputTokens,
-                            outputTokens,
-                            totalTokens,
-                            estimationMethod // 记录计费方式
-                        }
-                    );
-                    console.log(
-                        `✓ 用户 ${userId} 消费 ${creditsToDeduct} 积分 (${totalTokens} tokens, 方式: ${estimationMethod})`
-                    );
-                } else {
-                    console.warn(`⚠️ 未找到操作类型 'chat' 的计费配置，跳过扣费`);
-                }
+                // 3. 后置扣费
+                await postDeductCredits(creditContext, {
+                    tokens: totalTokens,
+                    metadata: {
+                        model: modelName,
+                        inputTokens,
+                        outputTokens,
+                        totalTokens,
+                        estimationMethod
+                    }
+                });
             } catch (error) {
                 console.error('扣费失败:', error);
                 // 记录失败但不影响用户体验
