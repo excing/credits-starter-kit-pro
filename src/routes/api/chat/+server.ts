@@ -62,11 +62,11 @@ export const POST: RequestHandler = async (event) => {
                     console.log(`⚠️ API 未返回 usage 对象，使用 tiktoken 估算 token 数量`);
 
                     // 估算输入 token
-                    const estimated = estimateMessagesTokens(modelMessages, modelName);
+                    const estimated = estimateMessagesTokens(modelMessages);
                     inputTokens = estimated.inputTokens;
 
                     // 估算输出 token
-                    outputTokens = estimateTokens(fullText, modelName);
+                    outputTokens = estimateTokens(fullText);
 
                     estimationMethod = 'tiktoken_estimation';
                 }

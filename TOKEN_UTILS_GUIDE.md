@@ -19,12 +19,11 @@ Token 工具模块 (`src/lib/server/token-utils.ts`) 提供了完整的 token �
 ```typescript
 import { estimateTokens } from '$lib/server/token-utils';
 
-// 基础用法
+// 基础用法（统一使用 gpt-4 tokenizer）
 const tokens = estimateTokens('Hello, world!');
 console.log(tokens); // 约 4
 
-// 指定模型
-const tokens2 = estimateTokens('你好，世界！', 'gpt-4');
+const tokens2 = estimateTokens('你好，世界！');
 console.log(tokens2); // 约 6
 ```
 
@@ -39,7 +38,7 @@ const messages = [
     { role: 'assistant', content: 'Hi there! How can I help you?' }
 ];
 
-const estimation = estimateMessagesTokens(messages, 'gpt-4');
+const estimation = estimateMessagesTokens(messages);
 console.log(estimation);
 // {
 //     inputTokens: 45,
@@ -152,7 +151,7 @@ const est1 = smartEstimateTokens('Hello, world!');
 // 估算消息
 const est2 = smartEstimateTokens([
     { role: 'user', content: 'Hello!' }
-], { model: 'gpt-4' });
+]);
 
 console.log(est1.totalTokens);
 console.log(est2.totalTokens);
@@ -248,7 +247,7 @@ export const POST: RequestHandler = async ({ request }) => {
     const { messages } = await request.json();
 
     // 估算输入 token（用于前置检查）
-    const estimation = estimateMessagesTokens(messages, 'gpt-4');
+    const estimation = estimateMessagesTokens(messages);
     console.log(`Estimated input tokens: ${estimation.inputTokens}`);
 
     let fullText = '';
@@ -315,9 +314,9 @@ import {
     formatCost
 } from '$lib/server/token-utils';
 
-function estimateChatCost(messages: any[], model: string = 'gpt-4') {
+function estimateChatCost(messages: any[]) {
     // 估算输入 token
-    const estimation = estimateMessagesTokens(messages, model);
+    const estimation = estimateMessagesTokens(messages);
     const inputTokens = estimation.inputTokens;
 
     // 估算输出 token（假设输出是输入的 1.5 倍）
@@ -357,7 +356,7 @@ import {
 } from '$lib/server/token-utils';
 
 function validateMessageLength(messages: any[], model: string = 'gpt-4') {
-    const estimation = estimateMessagesTokens(messages, model);
+    const estimation = estimateMessagesTokens(messages);
     const limit = getModelTokenLimit(model);
 
     if (isTokenLimitExceeded(estimation.totalTokens, model)) {
@@ -485,10 +484,10 @@ interface TokenUsage {
 ### 函数列表
 
 #### Token 估算
-- `estimateTokens(text, model?)` - 估算文本的 token 数量
-- `estimateMessagesTokens(messages, model?)` - 估算消息数组的 token 数量
-- `estimateMessagesTokensDetailed(messages, model?)` - 详细的消息 token 统计
-- `smartEstimateTokens(input, options?)` - 智能估算器
+- `estimateTokens(text)` - 估算文本的 token 数量（统一使用 gpt-4 tokenizer）
+- `estimateMessagesTokens(messages)` - 估算消息数组的 token 数量（统一使用 gpt-4 tokenizer）
+- `estimateMessagesTokensDetailed(messages)` - 详细的消息 token 统计（统一使用 gpt-4 tokenizer）
+- `smartEstimateTokens(input)` - 智能估算器（统一使用 gpt-4 tokenizer）
 
 #### Token 提取与合并
 - `extractTokenUsage(usage?)` - 从 API 响应提取 token 使用量
@@ -601,12 +600,13 @@ const tokens = estimateTokens(text); // 自动处理错误
 
 ### 问题 2：估算不准确
 
-**原因**：不同模型的 tokenizer 不同
+**原因**：tiktoken 估算与 API 实际使用可能有差异
 
 **解决方案**：
 ```typescript
-// 指定正确的模型
-const tokens = estimateTokens(text, 'gpt-4');
+// 优先使用 API 返回的精确 usage
+const actualUsage = extractTokenUsage(apiResponse.usage);
+// 仅在 API 未返回 usage 时才使用 tiktoken 估算
 ```
 
 ### 问题 3：API 响应字段不一致

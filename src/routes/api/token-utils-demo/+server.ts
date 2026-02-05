@@ -68,15 +68,15 @@ export const POST: RequestHandler = async ({ request }) => {
  * 示例 1：估算文本的 token 数量
  */
 function handleEstimateText(data: { text: string; model?: string }) {
-    const { text, model } = data;
+    const { text } = data;
 
-    const tokens = estimateTokens(text, model);
+    const tokens = estimateTokens(text);
 
     return json({
         success: true,
         result: {
             text,
-            model: model || 'gpt-4',
+            model: 'gpt-4',
             tokens,
             formatted: formatTokens(tokens)
         }
@@ -87,15 +87,15 @@ function handleEstimateText(data: { text: string; model?: string }) {
  * 示例 2：估算消息数组的 token 数量
  */
 function handleEstimateMessages(data: { messages: any[]; model?: string }) {
-    const { messages, model } = data;
+    const { messages } = data;
 
-    const estimation = estimateMessagesTokens(messages, model);
+    const estimation = estimateMessagesTokens(messages);
 
     return json({
         success: true,
         result: {
             messages,
-            model: model || 'gpt-4',
+            model: 'gpt-4',
             estimation,
             formatted: {
                 inputTokens: formatTokens(estimation.inputTokens),
@@ -109,9 +109,9 @@ function handleEstimateMessages(data: { messages: any[]; model?: string }) {
  * 示例 3：详细的消息 token 统计
  */
 function handleEstimateDetailed(data: { messages: any[]; model?: string }) {
-    const { messages, model } = data;
+    const { messages } = data;
 
-    const breakdown = estimateMessagesTokensDetailed(messages, model);
+    const breakdown = estimateMessagesTokensDetailed(messages);
     const total = breakdown.reduce((sum, msg) => sum + msg.tokens, 0);
 
     return json({
@@ -255,15 +255,15 @@ function handleGenerateReport(data: {
  * 示例 9：智能估算器
  */
 function handleSmartEstimate(data: { input: string | any[]; model?: string }) {
-    const { input, model } = data;
+    const { input } = data;
 
-    const estimation = smartEstimateTokens(input, { model });
+    const estimation = smartEstimateTokens(input);
 
     return json({
         success: true,
         result: {
             input: typeof input === 'string' ? input : `${input.length} messages`,
-            model: model || 'gpt-4',
+            model: 'gpt-4',
             estimation,
             formatted: {
                 inputTokens: formatTokens(estimation.inputTokens),

@@ -68,7 +68,6 @@ const REQUEST_OVERHEAD_TOKENS = 3;
  * 估算文本的 token 数量
  *
  * @param text - 要估算的文本
- * @param model - 模型名称（可选）
  * @returns token 数量
  *
  * @example
@@ -77,13 +76,13 @@ const REQUEST_OVERHEAD_TOKENS = 3;
  * console.log(tokens); // 约 4
  * ```
  */
-export function estimateTokens(text: string, model?: string): number {
+export function estimateTokens(text: string): number {
     if (!text) return 0;
 
     try {
-        // 尝试使用 tiktoken 精确计算
-        const tiktokenModel = model ? getTiktokenModel(model) : 'gpt-4';
-        const encoder = encoding_for_model(tiktokenModel);
+        // 统一使用 gpt-4 的 tokenizer (cl100k_base)
+        // 这样可以确保所有模型的 token 计数一致
+        const encoder = encoding_for_model('gpt-4');
         const tokens = encoder.encode(text);
         const count = tokens.length;
         encoder.free();
@@ -98,7 +97,6 @@ export function estimateTokens(text: string, model?: string): number {
  * 估算消息数组的 token 数量
  *
  * @param messages - 消息数组
- * @param model - 模型名称（可选）
  * @returns TokenEstimation 对象
  *
  * @example
@@ -112,15 +110,15 @@ export function estimateTokens(text: string, model?: string): number {
  * ```
  */
 export function estimateMessagesTokens(
-    messages: Array<{ role?: string; content: string | any }>,
-    model?: string
+    messages: Array<{ role?: string; content: string | any }>
 ): TokenEstimation {
     let inputTokens = 0;
 
+    // 统一使用 gpt-4 计数
     // 计算每条消息的 token
     for (const msg of messages) {
         const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-        inputTokens += estimateTokens(content, model);
+        inputTokens += estimateTokens(content);
         // 每条消息的格式开销
         inputTokens += MESSAGE_OVERHEAD_TOKENS;
     }
@@ -140,7 +138,6 @@ export function estimateMessagesTokens(
  * 估算每条消息的 token 数量（详细版）
  *
  * @param messages - 消息数组
- * @param model - 模型名称（可选）
  * @returns 每条消息的 token 统计
  *
  * @example
@@ -156,12 +153,12 @@ export function estimateMessagesTokens(
  * ```
  */
 export function estimateMessagesTokensDetailed(
-    messages: Array<{ role?: string; content: string | any }>,
-    model?: string
+    messages: Array<{ role?: string; content: string | any }>
 ): MessageTokens[] {
+    // 统一使用 gpt-4 计数
     return messages.map((msg) => {
         const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-        const tokens = estimateTokens(content, model) + MESSAGE_OVERHEAD_TOKENS;
+        const tokens = estimateTokens(content) + MESSAGE_OVERHEAD_TOKENS;
 
         return {
             role: msg.role || 'unknown',
@@ -419,7 +416,6 @@ export function getModelTokenLimit(model: string): number {
  * 智能 token 估算器（自动选择最佳方法）
  *
  * @param input - 输入数据（文本或消息数组）
- * @param options - 配置选项
  * @returns TokenEstimation 对象
  *
  * @example
@@ -430,21 +426,14 @@ export function getModelTokenLimit(model: string): number {
  * // 估算消息
  * const est2 = smartEstimateTokens([
  *     { role: 'user', content: 'Hello!' }
- * ], { model: 'gpt-4' });
+ * ]);
  * ```
  */
 export function smartEstimateTokens(
-    input: string | Array<{ role?: string; content: string | any }>,
-    options?: {
-        model?: string;
-        includeOverhead?: boolean;
-    }
+    input: string | Array<{ role?: string; content: string | any }>
 ): TokenEstimation {
-    const model = options?.model;
-    const includeOverhead = options?.includeOverhead ?? true;
-
     if (typeof input === 'string') {
-        const tokens = estimateTokens(input, model);
+        const tokens = estimateTokens(input);
         return {
             inputTokens: tokens,
             outputTokens: 0,
@@ -452,7 +441,7 @@ export function smartEstimateTokens(
             method: 'tiktoken'
         };
     } else {
-        return estimateMessagesTokens(input, model);
+        return estimateMessagesTokens(input);
     }
 }
 
