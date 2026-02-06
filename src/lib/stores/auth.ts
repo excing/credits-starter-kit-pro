@@ -1,4 +1,4 @@
-import { writable, get } from 'svelte/store';
+import { writable, get, derived } from 'svelte/store';
 import { authClient } from '$lib/auth-client';
 
 export type AuthUser = {
@@ -22,23 +22,54 @@ export type UserStats = {
 	}>;
 };
 
-const _user = writable<AuthUser | null>(null);
-const _loaded = writable(false);
-const _loading = writable(false);
-const _stats = writable<UserStats | null>(null);
-const _statsLoading = writable(false);
+// 封装的状态对象
+type AuthState = {
+	user: AuthUser | null;
+	loaded: boolean;
+	loading: boolean;
+};
+
+type StatsState = {
+	data: UserStats | null;
+	loaded: boolean;
+	loading: boolean;
+	error: string | null;
+};
+
+// 内部状态管理
+const _authState = writable<AuthState>({
+	user: null,
+	loaded: false,
+	loading: false
+});
+
+const _statsState = writable<StatsState>({
+	data: null,
+	loaded: false,
+	loading: false,
+	error: null
+});
 
 let inFlight: Promise<AuthUser | null> | null = null;
 
-export const currentUser = { subscribe: _user.subscribe };
-export const authLoaded = { subscribe: _loaded.subscribe };
-export const authLoading = { subscribe: _loading.subscribe };
-export const userStats = { subscribe: _stats.subscribe };
-export const statsLoading = { subscribe: _statsLoading.subscribe };
+// 导出简洁的 derived stores（保持 API 兼容性）
+export const currentUser = derived(_authState, ($state) => $state.user);
+export const authLoaded = derived(_authState, ($state) => $state.loaded);
+export const authLoading = derived(_authState, ($state) => $state.loading);
+export const userStats = derived(_statsState, ($state) => $state.data);
+export const statsLoading = derived(_statsState, ($state) => $state.loading);
+export const statsLoaded = derived(_statsState, ($state) => $state.loaded);
+
+// 也可以导出完整的状态对象（可选）
+export const authState = { subscribe: _authState.subscribe };
+export const statsState = { subscribe: _statsState.subscribe };
 
 export function setCurrentUser(user: AuthUser | null) {
-	_user.set(user);
-	_loaded.set(true);
+	_authState.update((state) => ({
+		...state,
+		user,
+		loaded: true
+	}));
 }
 
 /**
@@ -47,35 +78,40 @@ export function setCurrentUser(user: AuthUser | null) {
  */
 export function initAuthFromLayout(session: unknown) {
 	const sessionUser = (session as any)?.user ?? null;
-	const loaded = get(_loaded);
-	const existing = get(_user);
+	const state = get(_authState);
 
 	// First initialization: trust the server session.
-	if (!loaded) {
+	if (!state.loaded) {
 		setCurrentUser(sessionUser);
 		return;
 	}
 
 	// If server says "no session", clear local user.
 	if (!sessionUser) {
-		if (existing) setCurrentUser(null);
-		else _loaded.set(true);
+		if (state.user) setCurrentUser(null);
+		else _authState.update((s) => ({ ...s, loaded: true }));
 		return;
 	}
 
 	// If user changed (login as different user), replace.
-	if (!existing || existing.id !== sessionUser.id) {
+	if (!state.user || state.user.id !== sessionUser.id) {
 		setCurrentUser(sessionUser);
 		return;
 	}
 
 	// Same user: merge in a way that preserves local patches (existing wins).
-	_user.set({ ...(sessionUser as any), ...(existing as any) });
-	_loaded.set(true);
+	_authState.update((s) => ({
+		...s,
+		user: { ...(sessionUser as any), ...(s.user as any) },
+		loaded: true
+	}));
 }
 
 export function patchCurrentUser(patch: Partial<AuthUser>) {
-	_user.update((u) => (u ? ({ ...u, ...patch } as AuthUser) : u));
+	_authState.update((state) => ({
+		...state,
+		user: state.user ? ({ ...state.user, ...patch } as AuthUser) : state.user
+	}));
 }
 
 export function clearAuthState() {
@@ -84,7 +120,7 @@ export function clearAuthState() {
 }
 
 export async function refreshCurrentUser(): Promise<AuthUser | null> {
-	_loading.set(true);
+	_authState.update((state) => ({ ...state, loading: true }));
 	try {
 		const result = await authClient.getSession();
 		const user = (result as any)?.data?.user ?? null;
@@ -96,12 +132,13 @@ export async function refreshCurrentUser(): Promise<AuthUser | null> {
 		setCurrentUser(null);
 		return null;
 	} finally {
-		_loading.set(false);
+		_authState.update((state) => ({ ...state, loading: false }));
 	}
 }
 
 export async function ensureCurrentUserLoaded(): Promise<AuthUser | null> {
-	if (get(_loaded)) return get(_user);
+	const state = get(_authState);
+	if (state.loaded) return state.user;
 	if (inFlight) return inFlight;
 	inFlight = refreshCurrentUser().finally(() => {
 		inFlight = null;
@@ -113,8 +150,8 @@ export async function ensureCurrentUserLoaded(): Promise<AuthUser | null> {
  * 刷新用户积分余额
  */
 export async function refreshUserCredits(): Promise<void> {
-	const user = get(_user);
-	if (!user) return;
+	const state = get(_authState);
+	if (!state.user) return;
 
 	try {
 		const response = await fetch('/api/user/credits');
@@ -134,23 +171,36 @@ export async function refreshUserCredits(): Promise<void> {
  * 刷新用户统计数据
  */
 export async function refreshUserStats(): Promise<UserStats | null> {
-	const user = get(_user);
-	if (!user) return null;
+	const state = get(_authState);
+	if (!state.user) return null;
 
-	_statsLoading.set(true);
+	_statsState.update((s) => ({ ...s, loading: true, error: null }));
 	try {
 		const response = await fetch('/api/user/credits/stats');
 		if (response.ok) {
 			const stats = await response.json();
-			_stats.set(stats);
+			_statsState.update((s) => ({
+				...s,
+				data: stats,
+				loaded: true,
+				loading: false
+			}));
 			return stats;
 		}
+		_statsState.update((s) => ({
+			...s,
+			loading: false,
+			error: 'Failed to load stats'
+		}));
 		return null;
 	} catch (error) {
 		console.error('Failed to refresh stats:', error);
+		_statsState.update((s) => ({
+			...s,
+			loading: false,
+			error: error instanceof Error ? error.message : 'Unknown error'
+		}));
 		return null;
-	} finally {
-		_statsLoading.set(false);
 	}
 }
 
@@ -159,8 +209,8 @@ export async function refreshUserStats(): Promise<UserStats | null> {
  * 首次进入 dashboard 时调用
  */
 export async function initDashboardData(): Promise<void> {
-	const user = get(_user);
-	if (!user) return;
+	const state = get(_authState);
+	if (!state.user) return;
 
 	// 并行加载积分余额和统计数据
 	await Promise.all([
