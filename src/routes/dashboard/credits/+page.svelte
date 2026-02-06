@@ -9,7 +9,7 @@
     import { Label } from "$lib/components/ui/label";
     import { Badge } from "$lib/components/ui/badge";
     import { Skeleton } from "$lib/components/ui/skeleton";
-    import { Coins, Gift, History, AlertCircle } from "lucide-svelte";
+    import { Coins, Gift, History, AlertCircle, AlertTriangle } from "lucide-svelte";
     import { toast } from "svelte-sonner";
 
     let loading = $state(true);
@@ -18,15 +18,18 @@
     let redeemCode = $state("");
     let transactions = $state<any[]>([]);
     let packages = $state<any[]>([]);
+    let debts = $state<any[]>([]);
+    let debtsLoading = $state(true);
 
     // 加载页面特定数据（交易历史和套餐列表）
     async function loadPageData() {
         loading = true;
         try {
-            // 并行获取交易历史和用户套餐
-            const [historyRes, packagesRes] = await Promise.all([
+            // 并行获取交易历史、用户套餐和欠费记录
+            const [historyRes, packagesRes, debtsRes] = await Promise.all([
                 fetch("/api/user/credits/history?limit=20"),
-                fetch("/api/user/credits/packages")
+                fetch("/api/user/credits/packages"),
+                fetch("/api/user/credits/debts")
             ]);
 
             if (historyRes.ok) {
@@ -38,11 +41,17 @@
                 const data = await packagesRes.json();
                 packages = data.packages;
             }
+
+            if (debtsRes.ok) {
+                const data = await debtsRes.json();
+                debts = data.debts;
+            }
         } catch (error) {
             console.error("加载数据失败:", error);
             toast.error("加载数据失败");
         } finally {
             loading = false;
+            debtsLoading = false;
         }
     }
 
@@ -248,6 +257,46 @@
                             </Badge>
                         </div>
                     {/each}
+                </div>
+            </Card.Content>
+        </Card.Root>
+    {/if}
+
+    <!-- 欠费提醒 -->
+    {#if !debtsLoading && debts.length > 0}
+        <Card.Root class="border-red-200 bg-red-50 dark:bg-red-900/10">
+            <Card.Header>
+                <Card.Title class="flex items-center gap-2 text-red-800 dark:text-red-400">
+                    <AlertTriangle class="h-5 w-5" />
+                    欠费提醒
+                </Card.Title>
+                <Card.Description>您有未结清的欠费记录，充值后将自动结算</Card.Description>
+            </Card.Header>
+            <Card.Content>
+                <div class="space-y-2">
+                    {#each debts as debt}
+                        <div class="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded">
+                            <div>
+                                <p class="text-sm font-medium">
+                                    {debt.amount} 积分
+                                </p>
+                                <p class="text-xs text-muted-foreground">
+                                    {debt.operationType} · {formatDate(debt.createdAt)}
+                                </p>
+                            </div>
+                            <Badge variant="destructive">
+                                未结清
+                            </Badge>
+                        </div>
+                    {/each}
+                </div>
+                <div class="mt-4 p-3 bg-white dark:bg-gray-800 rounded border border-red-200">
+                    <p class="text-sm font-medium text-red-800 dark:text-red-400">
+                        欠费总额: {debts.reduce((sum, d) => sum + d.amount, 0)} 积分
+                    </p>
+                    <p class="text-xs text-muted-foreground mt-1">
+                        充值或兑换积分时将自动扣除欠费
+                    </p>
                 </div>
             </Card.Content>
         </Card.Root>

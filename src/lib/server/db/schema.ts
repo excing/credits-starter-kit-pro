@@ -146,3 +146,19 @@ export const redemptionHistory = pgTable('redemption_history', {
     expiresAt: timestamp('expires_at').notNull(),
     redeemedAt: timestamp('redeemed_at').notNull().defaultNow()
 });
+
+// 7. Credit Debt - 积分欠费表
+export const creditDebt = pgTable('credit_debt', {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull()
+        .references(() => user.id, { onDelete: 'cascade' }),
+    amount: integer('amount').notNull(), // 欠费金额（正数）
+    operationType: text('operation_type').notNull(), // 操作类型
+    metadata: text('metadata'), // 元数据（JSON字符串）
+    relatedId: text('related_id'), // 关联ID
+    isSettled: boolean('is_settled').notNull().default(false), // 是否已结清
+    settledAt: timestamp('settled_at'), // 结清时间
+    settledTransactionId: text('settled_transaction_id'), // 结清交易ID
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow()
+});

@@ -10,7 +10,7 @@
     import { Label } from "$lib/components/ui/label";
     import { Badge } from "$lib/components/ui/badge";
     import { Skeleton } from "$lib/components/ui/skeleton";
-    import { ShieldCheck, Gift, Package, Copy, Check, Plus, Edit, Trash2 } from "lucide-svelte";
+    import { ShieldCheck, Gift, Package, Copy, Check, Plus, Edit, Trash2, TrendingUp, Users, AlertCircle, DollarSign } from "lucide-svelte";
     import { toast } from "svelte-sonner";
     import { Textarea } from "$lib/components/ui/textarea";
 
@@ -24,6 +24,16 @@
     let copied = $state(false);
     let codesLoading = $state(true);
     let redemptionCodes = $state<any[]>([]);
+    let debtsLoading = $state(true);
+    let debts = $state<any[]>([]);
+    let debtFilter = $state<'all' | 'unsettled' | 'settled'>('unsettled');
+    let statsLoading = $state(true);
+    let stats = $state<any>({
+        totalPackages: 0,
+        totalCodes: 0,
+        totalDebts: 0,
+        unsettledDebts: 0
+    });
 
     // 表单数据 - 生成兑换码
     let selectedPackageId = $state("");
@@ -84,6 +94,84 @@
             codesLoading = false;
         }
     }
+
+    // 加载欠费列表
+    async function loadDebts() {
+        debtsLoading = true;
+        try {
+            const settled = debtFilter === 'all' ? undefined : debtFilter === 'settled' ? 'true' : 'false';
+            const url = settled ? `/api/admin/credits/debts?settled=${settled}` : '/api/admin/credits/debts';
+            const res = await fetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                debts = data.debts;
+            } else {
+                toast.error("加载欠费记录失败");
+            }
+        } catch (error) {
+            console.error("加载欠费记录失败:", error);
+            toast.error("加载失败");
+        } finally {
+            debtsLoading = false;
+        }
+    }
+
+    // 手动结清欠费
+    async function settleDebt(debtId: string) {
+        if (!confirm("确定要手动结清这笔欠费吗？")) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/admin/credits/debts/${debtId}/settle`, {
+                method: "POST",
+            });
+
+            if (res.ok) {
+                toast.success("欠费已结清！");
+                await loadDebts();
+            } else {
+                const data = await res.json();
+                toast.error(data.error || "结清失败");
+            }
+        } catch (error) {
+            console.error("结清欠费失败:", error);
+            toast.error("结清失败，请重试");
+        }
+    }
+
+    // 监听过滤器变化
+    $effect(() => {
+        if (debtFilter) {
+            loadDebts();
+        }
+    });
+
+    // 加载统计数据
+    async function loadStats() {
+        statsLoading = true;
+        try {
+            // 计算统计数据
+            stats = {
+                totalPackages: packages.length,
+                totalCodes: redemptionCodes.length,
+                totalDebts: debts.filter(d => !d.isSettled).reduce((sum, d) => sum + d.amount, 0),
+                unsettledDebts: debts.filter(d => !d.isSettled).length
+            };
+        } catch (error) {
+            console.error("加载统计数据失败:", error);
+        } finally {
+            statsLoading = false;
+        }
+    }
+
+    // 监听数据变化，更新统计
+    $effect(() => {
+        if (packages && redemptionCodes && debts) {
+            loadStats();
+        }
+    });
+
 
     // 生成兑换码（支持批量）
     async function handleGenerate() {
@@ -357,6 +445,7 @@
     onMount(() => {
         loadPackages();
         loadRedemptionCodes();
+        loadDebts();
     });
 </script>
 
@@ -365,7 +454,7 @@
         <div>
             <h1 class="text-3xl font-bold">管理员控制台</h1>
             <p class="text-muted-foreground mt-1">
-                管理积分套餐和生成兑换码
+                管理积分套餐、兑换码和欠费记录
             </p>
         </div>
         <div class="flex gap-2">
@@ -378,6 +467,69 @@
                 生成兑换码
             </Button>
         </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card.Root>
+            <Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Card.Title class="text-sm font-medium">
+                    积分套餐
+                </Card.Title>
+                <Package class="h-4 w-4 text-muted-foreground" />
+            </Card.Header>
+            <Card.Content>
+                <div class="text-2xl font-bold">{stats.totalPackages}</div>
+                <p class="text-xs text-muted-foreground">
+                    当前可用套餐数量
+                </p>
+            </Card.Content>
+        </Card.Root>
+
+        <Card.Root>
+            <Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Card.Title class="text-sm font-medium">
+                    兑换码
+                </Card.Title>
+                <Gift class="h-4 w-4 text-muted-foreground" />
+            </Card.Header>
+            <Card.Content>
+                <div class="text-2xl font-bold">{stats.totalCodes}</div>
+                <p class="text-xs text-muted-foreground">
+                    已生成兑换码数量
+                </p>
+            </Card.Content>
+        </Card.Root>
+
+        <Card.Root>
+            <Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Card.Title class="text-sm font-medium">
+                    未结清欠费
+                </Card.Title>
+                <AlertCircle class="h-4 w-4 text-muted-foreground" />
+            </Card.Header>
+            <Card.Content>
+                <div class="text-2xl font-bold">{stats.unsettledDebts}</div>
+                <p class="text-xs text-muted-foreground">
+                    待处理欠费记录
+                </p>
+            </Card.Content>
+        </Card.Root>
+
+        <Card.Root>
+            <Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Card.Title class="text-sm font-medium">
+                    欠费总额
+                </Card.Title>
+                <DollarSign class="h-4 w-4 text-muted-foreground" />
+            </Card.Header>
+            <Card.Content>
+                <div class="text-2xl font-bold">{stats.totalDebts}</div>
+                <p class="text-xs text-muted-foreground">
+                    未结清积分总额
+                </p>
+            </Card.Content>
+        </Card.Root>
     </div>
 
         <!-- 套餐列表 -->
@@ -471,6 +623,122 @@
                 {/if}
             </Card.Content>
         </Card.Root>
+
+    <!-- 欠费管理 -->
+    <Card.Root>
+        <Card.Header>
+            <div class="flex items-center justify-between">
+                <div>
+                    <Card.Title class="flex items-center gap-2">
+                        <ShieldCheck class="h-5 w-5" />
+                        欠费管理
+                    </Card.Title>
+                    <Card.Description>查看和管理用户欠费记录</Card.Description>
+                </div>
+                <div class="flex gap-2">
+                    <Button
+                        size="sm"
+                        variant={debtFilter === 'unsettled' ? 'default' : 'outline'}
+                        onclick={() => debtFilter = 'unsettled'}
+                    >
+                        未结清
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant={debtFilter === 'settled' ? 'default' : 'outline'}
+                        onclick={() => debtFilter = 'settled'}
+                    >
+                        已结清
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant={debtFilter === 'all' ? 'default' : 'outline'}
+                        onclick={() => debtFilter = 'all'}
+                    >
+                        全部
+                    </Button>
+                </div>
+            </div>
+        </Card.Header>
+        <Card.Content>
+            {#if debtsLoading}
+                <div class="space-y-2">
+                    <Skeleton class="h-16 w-full" />
+                    <Skeleton class="h-16 w-full" />
+                    <Skeleton class="h-16 w-full" />
+                </div>
+            {:else if debts.length === 0}
+                <p class="text-center text-muted-foreground py-8">
+                    {debtFilter === 'unsettled' ? '暂无未结清欠费' : debtFilter === 'settled' ? '暂无已结清欠费' : '暂无欠费记录'}
+                </p>
+            {:else}
+                <Table.Root>
+                    <Table.Header>
+                        <Table.Row>
+                            <Table.Head>用户ID</Table.Head>
+                            <Table.Head>欠费金额</Table.Head>
+                            <Table.Head>操作类型</Table.Head>
+                            <Table.Head>创建时间</Table.Head>
+                            <Table.Head>状态</Table.Head>
+                            <Table.Head>结清时间</Table.Head>
+                            <Table.Head class="text-right">操作</Table.Head>
+                        </Table.Row>
+                    </Table.Header>
+                    <Table.Body>
+                        {#each debts as debt}
+                            <Table.Row>
+                                <Table.Cell class="font-mono text-xs">
+                                    {debt.userId.substring(0, 8)}...
+                                </Table.Cell>
+                                <Table.Cell>
+                                    <Badge variant="destructive">
+                                        {debt.amount} 积分
+                                    </Badge>
+                                </Table.Cell>
+                                <Table.Cell>
+                                    <Badge variant="outline">
+                                        {debt.operationType}
+                                    </Badge>
+                                </Table.Cell>
+                                <Table.Cell>
+                                    <div class="text-sm">
+                                        {new Date(debt.createdAt).toLocaleString('zh-CN')}
+                                    </div>
+                                </Table.Cell>
+                                <Table.Cell>
+                                    <Badge
+                                        variant={debt.isSettled ? "default" : "secondary"}
+                                    >
+                                        {debt.isSettled ? "已结清" : "未结清"}
+                                    </Badge>
+                                </Table.Cell>
+                                <Table.Cell>
+                                    <div class="text-sm">
+                                        {debt.settledAt
+                                            ? new Date(debt.settledAt).toLocaleString('zh-CN')
+                                            : '-'}
+                                    </div>
+                                </Table.Cell>
+                                <Table.Cell class="text-right">
+                                    {#if !debt.isSettled}
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onclick={() => settleDebt(debt.id)}
+                                        >
+                                            手动结清
+                                        </Button>
+                                    {:else}
+                                        <span class="text-sm text-muted-foreground">-</span>
+                                    {/if}
+                                </Table.Cell>
+                            </Table.Row>
+                        {/each}
+                    </Table.Body>
+                </Table.Root>
+            {/if}
+        </Card.Content>
+    </Card.Root>
 
     <!-- 兑换码列表 -->
     <Card.Root>

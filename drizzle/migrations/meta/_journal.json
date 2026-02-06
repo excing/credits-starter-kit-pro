@@ -8,6 +8,13 @@
       "when": 1770386963466,
       "tag": "0000_outgoing_calypso",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1770391459305,
+      "tag": "0001_uneven_wolf_cub",
+      "breakpoints": true
     }
   ]
 }

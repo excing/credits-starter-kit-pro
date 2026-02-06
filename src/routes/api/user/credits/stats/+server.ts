@@ -1,8 +1,9 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
-import { creditTransaction, userCreditPackage } from '$lib/server/db/schema';
+import { creditTransaction, userCreditPackage, creditDebt } from '$lib/server/db/schema';
 import { eq, and, sql, gt } from 'drizzle-orm';
+import { getUserTotalDebt } from '$lib/server/credits';
 
 export const GET: RequestHandler = async ({ locals }) => {
     const userId = locals.session?.user?.id;
@@ -73,6 +74,22 @@ export const GET: RequestHandler = async ({ locals }) => {
             )
             .orderBy(userCreditPackage.expiresAt);
 
+        // 获取用户总欠费金额
+        const totalDebt = await getUserTotalDebt(userId);
+
+        // 获取未结清欠费数量
+        const [debtCount] = await db
+            .select({
+                count: sql<number>`COUNT(*)`
+            })
+            .from(creditDebt)
+            .where(
+                and(
+                    eq(creditDebt.userId, userId),
+                    eq(creditDebt.isSettled, false)
+                )
+            );
+
         return json({
             totalSpent: Number(totalSpent?.total ?? 0),
             totalEarned: Number(totalEarned?.total ?? 0),
@@ -88,7 +105,9 @@ export const GET: RequestHandler = async ({ locals }) => {
                 daysUntilExpiry: Math.ceil(
                     (pkg.expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
                 )
-            }))
+            })),
+            totalDebt,
+            debtCount: Number(debtCount?.count ?? 0)
         });
     } catch (error) {
         console.error('获取积分统计失败:', error);

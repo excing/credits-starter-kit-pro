@@ -4,7 +4,8 @@ import {
     userCreditPackage,
     creditTransaction,
     redemptionCode,
-    redemptionHistory
+    redemptionHistory,
+    creditDebt
 } from './db/schema';
 import { eq, and, lt, gt, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
@@ -88,7 +89,7 @@ export async function getUserActivePackages(userId: string) {
 }
 
 /**
- * 发放套餐给用户
+ * 发放套餐给用户（带欠费结算）
  */
 export async function grantPackageToUser(
     userId: string,
@@ -149,13 +150,182 @@ export async function grantPackageToUser(
             }),
             relatedId: sourceId
         });
+
+        // 结算欠费
+        await settleDebts(userId, tx);
     });
 
     return userPackageId;
 }
 
 /**
- * 扣除积分（优先从即将过期的套餐扣除）
+ * 延迟函数（用于重试机制）
+ */
+async function delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * 结算欠费（在事务中调用）
+ */
+async function settleDebts(userId: string, tx: any): Promise<void> {
+    // 获取所有未结清的欠费
+    const debts = await tx
+        .select()
+        .from(creditDebt)
+        .where(
+            and(
+                eq(creditDebt.userId, userId),
+                eq(creditDebt.isSettled, false)
+            )
+        )
+        .orderBy(creditDebt.createdAt); // 按创建时间排序，先结清早期欠费
+
+    if (debts.length === 0) {
+        return; // 没有欠费，直接返回
+    }
+
+    // 获取用户当前可用积分
+    const packages = await tx
+        .select()
+        .from(userCreditPackage)
+        .where(
+            and(
+                eq(userCreditPackage.userId, userId),
+                eq(userCreditPackage.isActive, true),
+                gt(userCreditPackage.expiresAt, new Date()),
+                gt(userCreditPackage.creditsRemaining, 0)
+            )
+        )
+        .orderBy(userCreditPackage.expiresAt);
+
+    let availableCredits = packages.reduce((sum: number, pkg: any) => sum + pkg.creditsRemaining, 0);
+
+    // 逐个结算欠费
+    for (const debt of debts) {
+        if (availableCredits <= 0) {
+            break; // 没有可用积分了
+        }
+
+        const settleAmount = Math.min(debt.amount, availableCredits);
+        let remainingSettle = settleAmount;
+
+        // 从套餐中扣除积分
+        for (const pkg of packages) {
+            if (remainingSettle <= 0) break;
+            if (pkg.creditsRemaining <= 0) continue;
+
+            const deductFromThis = Math.min(remainingSettle, pkg.creditsRemaining);
+            const newBalance = pkg.creditsRemaining - deductFromThis;
+
+            // 更新套餐余额
+            await tx
+                .update(userCreditPackage)
+                .set({ creditsRemaining: newBalance })
+                .where(eq(userCreditPackage.id, pkg.id));
+
+            // 创建交易记录
+            const transactionId = randomUUID();
+            await tx.insert(creditTransaction).values({
+                id: transactionId,
+                userId,
+                userPackageId: pkg.id,
+                type: 'admin_adjustment',
+                amount: -deductFromThis,
+                balanceBefore: pkg.creditsRemaining,
+                balanceAfter: newBalance,
+                description: `结算欠费: ${debt.operationType}`,
+                metadata: JSON.stringify({
+                    debtId: debt.id,
+                    operationType: debt.operationType,
+                    originalDebtAmount: debt.amount,
+                    settledAmount: deductFromThis
+                }),
+                relatedId: debt.id
+            });
+
+            remainingSettle -= deductFromThis;
+            pkg.creditsRemaining = newBalance; // 更新本地副本
+        }
+
+        availableCredits -= settleAmount;
+
+        // 如果完全结清，标记欠费为已结清
+        if (settleAmount >= debt.amount) {
+            await tx
+                .update(creditDebt)
+                .set({
+                    isSettled: true,
+                    settledAt: new Date(),
+                    updatedAt: new Date()
+                })
+                .where(eq(creditDebt.id, debt.id));
+
+            console.log('欠费已结清:', {
+                userId,
+                debtId: debt.id,
+                amount: debt.amount,
+                operationType: debt.operationType
+            });
+        } else {
+            // 部分结清，更新欠费金额
+            await tx
+                .update(creditDebt)
+                .set({
+                    amount: debt.amount - settleAmount,
+                    updatedAt: new Date()
+                })
+                .where(eq(creditDebt.id, debt.id));
+
+            console.log('欠费部分结清:', {
+                userId,
+                debtId: debt.id,
+                originalAmount: debt.amount,
+                settledAmount: settleAmount,
+                remainingAmount: debt.amount - settleAmount,
+                operationType: debt.operationType
+            });
+        }
+    }
+}
+
+/**
+ * 记录欠费
+ */
+async function recordDebt(
+    userId: string,
+    amount: number,
+    operationType: string,
+    metadata?: Record<string, any>
+): Promise<void> {
+    try {
+        await db.insert(creditDebt).values({
+            id: randomUUID(),
+            userId,
+            amount,
+            operationType,
+            metadata: metadata ? JSON.stringify(metadata) : null,
+            relatedId: metadata?.relatedId || null,
+            isSettled: false
+        });
+
+        console.log('欠费记录已创建:', {
+            userId,
+            amount,
+            operationType
+        });
+    } catch (error) {
+        console.error('记录欠费失败:', {
+            userId,
+            amount,
+            operationType,
+            error: error instanceof Error ? error.message : String(error)
+        });
+    }
+}
+
+/**
+ * 扣除积分（优先从即将过期的套餐扣除）- 带重试机制
  */
 export async function deductCredits(
     userId: string,
@@ -167,47 +337,90 @@ export async function deductCredits(
         throw new Error('扣除金额必须大于0');
     }
 
-    await db.transaction(async (tx) => {
-        // 获取所有有效套餐，按过期时间排序
-        const packages = await getUserActivePackages(userId);
+    const retryDelays = [5000, 10000, 20000]; // 5秒, 10秒, 20秒
+    let lastError: Error | null = null;
 
-        // 检查总余额
-        const totalBalance = packages.reduce((sum, pkg) => sum + pkg.creditsRemaining, 0);
-        if (totalBalance < amount) {
-            throw new InsufficientCreditsError(amount, totalBalance);
-        }
+    // 重试机制：最多尝试3次
+    for (let attempt = 0; attempt < retryDelays.length + 1; attempt++) {
+        try {
+            await db.transaction(async (tx) => {
+                // 获取所有有效套餐，按过期时间排序
+                const packages = await getUserActivePackages(userId);
 
-        let remainingAmount = amount;
+                // 检查总余额
+                const totalBalance = packages.reduce((sum, pkg) => sum + pkg.creditsRemaining, 0);
 
-        // 从最早过期的套餐开始扣除
-        for (const pkg of packages) {
-            if (remainingAmount <= 0) break;
+                let remainingAmount = amount;
 
-            const deductFromThis = Math.min(remainingAmount, pkg.creditsRemaining);
-            const newBalance = pkg.creditsRemaining - deductFromThis;
+                // 从最早过期的套餐开始扣除
+                for (const pkg of packages) {
+                    if (remainingAmount <= 0) break;
 
-            // 更新套餐余额
-            await tx
-                .update(userCreditPackage)
-                .set({ creditsRemaining: newBalance })
-                .where(eq(userCreditPackage.id, pkg.id));
+                    const deductFromThis = Math.min(remainingAmount, pkg.creditsRemaining);
+                    const newBalance = pkg.creditsRemaining - deductFromThis;
 
-            // 创建交易记录
-            await tx.insert(creditTransaction).values({
-                id: randomUUID(),
-                userId,
-                userPackageId: pkg.id,
-                type: operationType as TransactionType,
-                amount: -deductFromThis,
-                balanceBefore: pkg.creditsRemaining,
-                balanceAfter: newBalance,
-                description: `${operationType} 消费`,
-                metadata: metadata ? JSON.stringify(metadata) : null
+                    // 更新套餐余额
+                    await tx
+                        .update(userCreditPackage)
+                        .set({ creditsRemaining: newBalance })
+                        .where(eq(userCreditPackage.id, pkg.id));
+
+                    // 创建交易记录
+                    await tx.insert(creditTransaction).values({
+                        id: randomUUID(),
+                        userId,
+                        userPackageId: pkg.id,
+                        type: operationType as TransactionType,
+                        amount: -deductFromThis,
+                        balanceBefore: pkg.creditsRemaining,
+                        balanceAfter: newBalance,
+                        description: `${operationType} 消费`,
+                        metadata: metadata ? JSON.stringify(metadata) : null
+                    });
+
+                    remainingAmount -= deductFromThis;
+                }
+
+                // 如果还有剩余未扣除的金额，记录欠费
+                if (remainingAmount > 0) {
+                    await recordDebt(userId, remainingAmount, operationType, metadata);
+                    throw new InsufficientCreditsError(amount, totalBalance);
+                }
             });
 
-            remainingAmount -= deductFromThis;
+            // 扣费成功，返回
+            return;
+        } catch (error) {
+            lastError = error as Error;
+
+            // 如果是余额不足错误，不重试（已经扣除了现有余额并记录了欠费）
+            if (error instanceof InsufficientCreditsError) {
+                throw error;
+            }
+
+            // 记录重试日志
+            console.error(`扣费失败 (尝试 ${attempt + 1}/${retryDelays.length + 1}):`, {
+                userId,
+                amount,
+                operationType,
+                error: error instanceof Error ? error.message : String(error)
+            });
+
+            // 如果还有重试机会，等待后重试
+            if (attempt < retryDelays.length) {
+                await delay(retryDelays[attempt]);
+            }
         }
+    }
+
+    // 所有重试都失败，记录欠费
+    console.error('扣费失败，已达最大重试次数，记录欠费:', {
+        userId,
+        amount,
+        operationType
     });
+    await recordDebt(userId, amount, operationType, metadata);
+    throw lastError || new Error('扣费失败');
 }
 
 /**
@@ -414,6 +627,7 @@ export async function checkSufficientCredits(
 
 /**
  * 初始化新用户积分（发放欢迎套餐）
+ * @deprecated
  */
 export async function initializeUserCredits(
     userId: string,
@@ -451,4 +665,46 @@ export async function expireOldPackages(): Promise<number> {
         );
 
     return result.rowCount ?? 0;
+}
+
+/**
+ * 获取用户欠费记录
+ */
+export async function getUserDebts(
+    userId: string,
+    includeSettled: boolean = false
+) {
+    const conditions = includeSettled
+        ? [eq(creditDebt.userId, userId)]
+        : [eq(creditDebt.userId, userId), eq(creditDebt.isSettled, false)];
+
+    const debts = await db
+        .select()
+        .from(creditDebt)
+        .where(and(...conditions))
+        .orderBy(sql`${creditDebt.createdAt} DESC`);
+
+    return debts.map((d) => ({
+        ...d,
+        metadata: d.metadata ? JSON.parse(d.metadata) : null
+    }));
+}
+
+/**
+ * 获取用户总欠费金额
+ */
+export async function getUserTotalDebt(userId: string): Promise<number> {
+    const result = await db
+        .select({
+            totalDebt: sql<number>`COALESCE(SUM(${creditDebt.amount}), 0)`
+        })
+        .from(creditDebt)
+        .where(
+            and(
+                eq(creditDebt.userId, userId),
+                eq(creditDebt.isSettled, false)
+            )
+        );
+
+    return Number(result[0]?.totalDebt ?? 0);
 }
