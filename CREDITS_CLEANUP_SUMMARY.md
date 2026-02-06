@@ -106,7 +106,6 @@ VALUES
 在 `.env` 文件中：
 ```env
 ADMIN_EMAILS=admin@example.com
-INITIAL_CREDITS=100
 ```
 
 ### 2. 启动应用
@@ -137,7 +136,6 @@ npm run dev
 1. **首次使用**：需要先创建积分套餐，才能生成兑换码
 2. **管理员权限**：确保在 `.env` 中正确配置了 `ADMIN_EMAILS`
 3. **计费配置**：如果需要使用 AI 聊天功能，需要先配置计费规则
-4. **新用户初始化**：新用户注册时会自动获得初始积分（由 `INITIAL_CREDITS` 环境变量控制）
 
 ## 📁 文件变更摘要
 

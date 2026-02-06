@@ -188,12 +188,6 @@ http://localhost:3000
 ```env
 # 管理员邮箱（后端权限检查）
 ADMIN_EMAILS=admin@blendiv.com
-
-# 管理员邮箱（前端显示控制）
-PUBLIC_ADMIN_EMAILS=admin@blendiv.com
-
-# 新用户初始积分
-INITIAL_CREDITS=100
 ```
 
 ### 默认套餐

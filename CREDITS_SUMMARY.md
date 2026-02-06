@@ -91,7 +91,7 @@
 6. `src/lib/components/dashboard/SectionCards.svelte` - 积分卡片
 7. `src/routes/dashboard/chat/+page.svelte` - 余额提示
 8. `src/hooks.server.ts` - 新用户初始化
-9. `.env` - 添加 ADMIN_EMAILS 和 INITIAL_CREDITS
+9. `.env` - 添加 ADMIN_EMAILS
 
 ## 🚀 快速开始
 
@@ -99,7 +99,6 @@
 在 `.env` 文件中：
 ```env
 ADMIN_EMAILS=admin@example.com
-INITIAL_CREDITS=100
 ```
 
 ### 2. 创建积分套餐
