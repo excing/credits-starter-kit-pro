@@ -6,7 +6,8 @@ import { preCheckCredits, postDeductCredits } from '$lib/server/credits-middlewa
 import {
     estimateTokens,
     estimateMessagesTokens,
-    extractTokenUsage
+    extractTokenUsage,
+    calculateTokenCost
 } from '$lib/server/token-utils';
 
 // 创建自定义 OpenAI provider，支持自定义 baseURL
@@ -73,16 +74,16 @@ export const POST: RequestHandler = async (event) => {
 
                 const totalTokens = inputTokens + outputTokens;
 
+                // 计算积分费用
+                const creditsToDeduct = calculateTokenCost(totalTokens, 'chat_usage');
+
                 // 3. 后置扣费
-                await postDeductCredits(creditContext, {
-                    tokens: totalTokens,
-                    metadata: {
-                        model: modelName,
-                        inputTokens,
-                        outputTokens,
-                        totalTokens,
-                        estimationMethod
-                    }
+                await postDeductCredits(creditContext, creditsToDeduct, {
+                    model: modelName,
+                    inputTokens,
+                    outputTokens,
+                    totalTokens,
+                    estimationMethod
                 });
             } catch (error) {
                 console.error('扣费失败:', error);
