@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { creditDebt } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import { isAdmin } from '$server/auth-utils';
 
 /**
  * 管理员查看所有欠费记录
@@ -12,13 +13,11 @@ export const GET: RequestHandler = async ({ locals, url }) => {
     const userId = locals.session?.user?.id;
     const userEmail = locals.session?.user?.email;
 
-    if (!userId) {
+    if (!userId || !userEmail) {
         return json({ error: '未授权' }, { status: 401 });
     }
 
-    // 检查是否为管理员
-    const adminEmail = process.env.ADMIN_EMAIL;
-    if (!adminEmail || userEmail !== adminEmail) {
+    if (!isAdmin(userEmail)) {
         return json({ error: '需要管理员权限' }, { status: 403 });
     }
 
