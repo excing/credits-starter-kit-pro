@@ -29,6 +29,22 @@ export interface OperationCostConfig {
  * 使用 as const 确保类型安全和编译时优化
  */
 export const OPERATION_COSTS = {
+
+    /**
+     * 默认计费
+     * 固定 1 积分/次
+     */
+    default_usage: {
+        operationType: 'default_usage',
+        costType: 'fixed',
+        costAmount: 1,
+        costPer: 1,
+        isActive: true,
+        metadata: {
+            note: 'Default operation cost'
+        }
+    },
+
     /**
      * AI 聊天计费
      * 1 积分 / 1000 tokens

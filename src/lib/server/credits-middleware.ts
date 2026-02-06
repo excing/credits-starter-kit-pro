@@ -359,3 +359,176 @@ export function withCredits<T = any>(
         return result.response;
     };
 }
+
+/**
+ * 高阶函数：为流式 API handler 添加积分管理（回调模式）
+ *
+ * 专为流式响应设计，通过回调函数让调用者自主控制扣费时机。
+ * 解决了 `withCredits` 无法处理流式响应的问题。
+ *
+ * **工作流程**：
+ * 1. 前置检查：验证用户身份和积分余额
+ * 2. 注入回调：将 `deductCredits` 回调函数注入到 handler 中
+ * 3. 执行业务逻辑：调用传入的 handler 函数
+ * 4. 调用者控制扣费：在流结束时调用 `deductCredits()` 完成扣费
+ *
+ * **设计优势**：
+ * - 调用者完全控制扣费时机
+ * - 无需管理 Promise，代码更简洁
+ * - 可以在任何异步回调中调用（如 onFinish、onComplete）
+ * - 类型安全，编译时检查
+ *
+ * @param handler - 流式 API 处理函数
+ * @param handler.creditContext - 积分上下文，包含 userId、operationType、initialBalance
+ * @param handler.deductCredits - 扣费回调函数，在流结束时调用
+ * @param options - 配置选项
+ * @returns SvelteKit RequestHandler
+ *
+ * @example
+ * ```typescript
+ * import { withCreditsStreaming } from '$server/credits-middleware';
+ * import { streamText } from 'ai';
+ * import { calculateTokenCost, estimateTokens } from '$server/token-utils';
+ *
+ * // 示例 1：AI 流式聊天（推荐用法）
+ * export const POST = withCreditsStreaming(
+ *     async ({ request, creditContext, deductCredits }) => {
+ *         const { messages } = await request.json();
+ *         let fullText = '';
+ *
+ *         const result = streamText({
+ *             model: openai.chat('gpt-4'),
+ *             messages,
+ *             onChunk: ({ chunk }) => {
+ *                 if (chunk.type === 'text-delta') {
+ *                     fullText += chunk.text;
+ *                 }
+ *             },
+ *             onFinish: async ({ usage }) => {
+ *                 // 流结束后，调用回调函数扣费
+ *                 const totalTokens = usage.totalTokens || estimateTokens(fullText);
+ *                 const creditsToDeduct = calculateTokenCost(totalTokens, 'chat_usage');
+ *
+ *                 await deductCredits(creditsToDeduct, {
+ *                     model: 'gpt-4',
+ *                     inputTokens: usage.inputTokens,
+ *                     outputTokens: usage.outputTokens,
+ *                     totalTokens
+ *                 });
+ *             }
+ *         });
+ *
+ *         return result.toUIMessageStreamResponse();
+ *     },
+ *     { operationType: 'chat_usage', minCreditsRequired: 1 }
+ * );
+ *
+ * // 示例 2：语音合成流式响应
+ * export const POST = withCreditsStreaming(
+ *     async ({ request, creditContext, deductCredits }) => {
+ *         const { text } = await request.json();
+ *         let audioLength = 0;
+ *
+ *         const stream = synthesizeSpeech(text, {
+ *             onProgress: (bytes) => {
+ *                 audioLength += bytes;
+ *             },
+ *             onComplete: async () => {
+ *                 // 流结束后扣费
+ *                 const seconds = audioLength / 16000;
+ *                 const creditsToDeduct = Math.ceil(seconds * 0.1);
+ *
+ *                 await deductCredits(creditsToDeduct, {
+ *                     audioLength,
+ *                     duration: seconds
+ *                 });
+ *             }
+ *         });
+ *
+ *         return new Response(stream, {
+ *             headers: { 'Content-Type': 'audio/mpeg' }
+ *         });
+ *     },
+ *     { operationType: 'speech_synthesis', minCreditsRequired: 1 }
+ * );
+ *
+ * // 示例 3：不扣费的流式响应（不调用 deductCredits）
+ * export const GET = withCreditsStreaming(
+ *     async ({ creditContext, deductCredits }) => {
+ *         const stream = createEventStream(creditContext.userId);
+ *
+ *         // 不调用 deductCredits，不扣费
+ *         return new Response(stream, {
+ *             headers: { 'Content-Type': 'text/event-stream' }
+ *         });
+ *     },
+ *     { operationType: 'event_stream', skipPostDeduct: true }
+ * );
+ *
+ * // 示例 4：条件扣费（根据流内容决定是否扣费）
+ * export const POST = withCreditsStreaming(
+ *     async ({ request, creditContext, deductCredits }) => {
+ *         const { query } = await request.json();
+ *         let hasResults = false;
+ *
+ *         const result = streamSearch(query, {
+ *             onResult: (result) => {
+ *                 hasResults = true;
+ *             },
+ *             onFinish: async () => {
+ *                 // 只有找到结果才扣费
+ *                 if (hasResults) {
+ *                     await deductCredits(5, { query, hasResults });
+ *                 }
+ *             }
+ *         });
+ *
+ *         return result.toResponse();
+ *     },
+ *     { operationType: 'search', minCreditsRequired: 5 }
+ * );
+ * ```
+ */
+export function withCreditsStreaming(
+    handler: (
+        event: RequestEvent & {
+            creditContext: CreditContext;
+            deductCredits: (
+                creditsToDeduct: number,
+                metadata?: Record<string, any>
+            ) => Promise<void>;
+        }
+    ) => Promise<Response>,
+    options: WithCreditsOptions
+) {
+    return async (event: RequestEvent): Promise<Response> => {
+        // 1. 前置检查
+        const preCheck = await preCheckCredits(event, options);
+        if (!preCheck.success) {
+            return preCheck.error;
+        }
+
+        // 2. 创建扣费回调函数
+        const deductCredits = async (
+            creditsToDeduct: number,
+            metadata?: Record<string, any>
+        ): Promise<void> => {
+            if (options.skipPostDeduct) {
+                console.log(`⚠️ skipPostDeduct 已启用，跳过扣费`);
+                return;
+            }
+
+            await postDeductCredits(preCheck.context, creditsToDeduct, metadata);
+        };
+
+        // 3. 执行业务逻辑（注入 creditContext 和 deductCredits 回调）
+        const response = await handler({
+            ...event,
+            creditContext: preCheck.context,
+            deductCredits
+        });
+
+        // 4. 立即返回流式响应
+        return response;
+    };
+}
