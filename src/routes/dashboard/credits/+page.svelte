@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { currentUser, refreshUserCredits } from "$lib/stores/auth";
+    import { currentUser, userStats, statsLoading, afterCreditsEarned } from "$lib/stores/auth";
     import * as Card from "$lib/components/ui/card";
     import * as Dialog from "$lib/components/ui/dialog";
     import * as Table from "$lib/components/ui/table";
@@ -18,34 +18,25 @@
     let redeemCode = $state("");
     let transactions = $state<any[]>([]);
     let packages = $state<any[]>([]);
-    let stats = $state<any>(null);
 
-    // 加载数据
-    async function loadData() {
+    // 加载页面特定数据（交易历史和套餐列表）
+    async function loadPageData() {
         loading = true;
         try {
-            // 刷新积分余额
-            await refreshUserCredits();
+            // 并行获取交易历史和用户套餐
+            const [historyRes, packagesRes] = await Promise.all([
+                fetch("/api/user/credits/history?limit=20"),
+                fetch("/api/user/credits/packages")
+            ]);
 
-            // 获取交易历史
-            const historyRes = await fetch("/api/user/credits/history?limit=20");
             if (historyRes.ok) {
                 const data = await historyRes.json();
                 transactions = data.transactions;
             }
 
-            // 获取用户套餐
-            const packagesRes = await fetch("/api/user/credits/packages");
             if (packagesRes.ok) {
                 const data = await packagesRes.json();
                 packages = data.packages;
-            }
-
-            // 获取统计数据
-            const statsRes = await fetch("/api/user/credits/stats");
-            if (statsRes.ok) {
-                const data = await statsRes.json();
-                stats = data;
             }
         } catch (error) {
             console.error("加载数据失败:", error);
@@ -76,7 +67,10 @@
                 toast.success(data.message || "兑换成功！");
                 redeemCode = "";
                 redeemDialogOpen = false;
-                await loadData(); // 重新加载数据
+                // 兑换成功后刷新积分和统计数据
+                await afterCreditsEarned();
+                // 重新加载页面数据
+                await loadPageData();
             } else {
                 toast.error(data.error || "兑换失败");
             }
@@ -108,7 +102,7 @@
     }
 
     onMount(() => {
-        loadData();
+        loadPageData();
     });
 </script>
 
@@ -121,19 +115,23 @@
     </div>
 
     <!-- 积分统计卡片 -->
-    {#if !loading && stats}
+    {#if $userStats}
         <div class="grid gap-4 md:grid-cols-3">
             <Card.Root>
                 <Card.Header>
                     <Card.Title class="text-sm font-medium">总获得</Card.Title>
                 </Card.Header>
                 <Card.Content>
-                    <div class="text-2xl font-bold text-green-600">
-                        +{stats.totalEarned}
-                    </div>
-                    <p class="text-xs text-muted-foreground mt-1">
-                        累计获得积分
-                    </p>
+                    {#if $statsLoading}
+                        <Skeleton class="h-8 w-24" />
+                    {:else}
+                        <div class="text-2xl font-bold text-green-600">
+                            +{$userStats.totalEarned}
+                        </div>
+                        <p class="text-xs text-muted-foreground mt-1">
+                            累计获得积分
+                        </p>
+                    {/if}
                 </Card.Content>
             </Card.Root>
 
@@ -142,12 +140,16 @@
                     <Card.Title class="text-sm font-medium">总消费</Card.Title>
                 </Card.Header>
                 <Card.Content>
-                    <div class="text-2xl font-bold text-red-600">
-                        -{stats.totalSpent}
-                    </div>
-                    <p class="text-xs text-muted-foreground mt-1">
-                        累计消费积分
-                    </p>
+                    {#if $statsLoading}
+                        <Skeleton class="h-8 w-24" />
+                    {:else}
+                        <div class="text-2xl font-bold text-red-600">
+                            -{$userStats.totalSpent}
+                        </div>
+                        <p class="text-xs text-muted-foreground mt-1">
+                            累计消费积分
+                        </p>
+                    {/if}
                 </Card.Content>
             </Card.Root>
 
@@ -156,12 +158,16 @@
                     <Card.Title class="text-sm font-medium">即将过期</Card.Title>
                 </Card.Header>
                 <Card.Content>
-                    <div class="text-2xl font-bold text-orange-600">
-                        {stats.expiringPackages.reduce((sum: number, pkg: any) => sum + pkg.creditsRemaining, 0)}
-                    </div>
-                    <p class="text-xs text-muted-foreground mt-1">
-                        30天内过期积分
-                    </p>
+                    {#if $statsLoading}
+                        <Skeleton class="h-8 w-24" />
+                    {:else}
+                        <div class="text-2xl font-bold text-orange-600">
+                            {$userStats.expiringPackages.reduce((sum: number, pkg: any) => sum + pkg.creditsRemaining, 0)}
+                        </div>
+                        <p class="text-xs text-muted-foreground mt-1">
+                            30天内过期积分
+                        </p>
+                    {/if}
                 </Card.Content>
             </Card.Root>
         </div>
@@ -216,7 +222,7 @@
     </div>
 
     <!-- 即将过期提醒 -->
-    {#if !loading && stats && stats.expiringPackages.length > 0}
+    {#if $userStats && $userStats.expiringPackages.length > 0}
         <Card.Root class="border-orange-200 bg-orange-50 dark:bg-orange-900/10">
             <Card.Header>
                 <Card.Title class="flex items-center gap-2 text-orange-800 dark:text-orange-400">
@@ -227,7 +233,7 @@
             </Card.Header>
             <Card.Content>
                 <div class="space-y-2">
-                    {#each stats.expiringPackages as pkg}
+                    {#each $userStats.expiringPackages as pkg}
                         <div class="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded">
                             <div>
                                 <p class="text-sm font-medium">

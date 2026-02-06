@@ -12,8 +12,7 @@
         Coins,
         ShieldCheck,
     } from "lucide-svelte";
-    import { currentUser, refreshUserCredits } from "$lib/stores/auth";
-    import { onMount } from "svelte";
+    import { currentUser } from "$lib/stores/auth";
     import { page } from "$app/stores";
 
     import type { Snippet } from "svelte";
@@ -24,11 +23,6 @@
 
     let { children }: Props = $props();
     let sheetOpen = $state(false);
-
-    // 刷新积分余额
-    onMount(() => {
-        refreshUserCredits();
-    });
 
     // 从服务端获取管理员状态
     const isAdmin = $derived($page.data.isAdmin ?? false);

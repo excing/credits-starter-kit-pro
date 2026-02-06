@@ -3,7 +3,7 @@
     import { Input } from "$lib/components/ui/input";
     import { cn } from "$lib/utils";
     import { Chat } from "@ai-sdk/svelte";
-    import { currentUser } from "$lib/stores/auth";
+    import { currentUser, afterCreditsConsumed } from "$lib/stores/auth";
     import { AlertCircle } from "lucide-svelte";
     import { toast } from "svelte-sonner";
     import { goto } from "$app/navigation";
@@ -18,6 +18,8 @@
         try {
             await chat.sendMessage({ text: input });
             input = "";
+            // 消费积分后刷新余额
+            await afterCreditsConsumed();
         } catch (error: any) {
             console.error("发送消息失败:", error);
 

@@ -2,38 +2,11 @@
     import * as Card from "$lib/components/ui/card";
     import {
         TrendingUp,
-        TrendingDown,
-        Users,
-        DollarSign,
         Activity,
-        CreditCard,
         Coins,
         Package,
-        MessageCircle,
     } from "lucide-svelte";
-    import { currentUser } from "$lib/stores/auth";
-    import { onMount } from "svelte";
-
-    let stats = $state<any>(null);
-    let loading = $state(true);
-
-    // 加载统计数据
-    async function loadStats() {
-        try {
-            const res = await fetch("/api/user/credits/stats");
-            if (res.ok) {
-                stats = await res.json();
-            }
-        } catch (error) {
-            console.error("加载统计失败:", error);
-        } finally {
-            loading = false;
-        }
-    }
-
-    onMount(() => {
-        loadStats();
-    });
+    import { currentUser, userStats, statsLoading } from "$lib/stores/auth";
 
     const cards = $derived([
         {
@@ -54,14 +27,14 @@
         },
         {
             title: "总消费",
-            value: stats?.totalSpent?.toString() ?? "0",
+            value: $userStats?.totalSpent?.toString() ?? "0",
             change: "积分",
             trending: "neutral",
             icon: Activity,
         },
         {
             title: "总获得",
-            value: stats?.totalEarned?.toString() ?? "0",
+            value: $userStats?.totalEarned?.toString() ?? "0",
             change: "积分",
             trending: "neutral",
             icon: TrendingUp,
@@ -80,7 +53,7 @@
                 <card.icon class="text-muted-foreground h-4 w-4" />
             </Card.Header>
             <Card.Content>
-                {#if loading}
+                {#if $statsLoading}
                     <div class="h-8 w-24 bg-muted animate-pulse rounded"></div>
                 {:else}
                     <div class="text-2xl font-bold">{card.value}</div>

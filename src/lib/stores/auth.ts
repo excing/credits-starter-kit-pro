@@ -12,15 +12,29 @@ export type AuthUser = {
 	[key: string]: unknown;
 };
 
+export type UserStats = {
+	totalSpent: number;
+	totalEarned: number;
+	expiringPackages: Array<{
+		creditsRemaining: number;
+		daysUntilExpiry: number;
+		expiresAt: string;
+	}>;
+};
+
 const _user = writable<AuthUser | null>(null);
 const _loaded = writable(false);
 const _loading = writable(false);
+const _stats = writable<UserStats | null>(null);
+const _statsLoading = writable(false);
 
 let inFlight: Promise<AuthUser | null> | null = null;
 
 export const currentUser = { subscribe: _user.subscribe };
 export const authLoaded = { subscribe: _loaded.subscribe };
 export const authLoading = { subscribe: _loading.subscribe };
+export const userStats = { subscribe: _stats.subscribe };
+export const statsLoading = { subscribe: _statsLoading.subscribe };
 
 export function setCurrentUser(user: AuthUser | null) {
 	_user.set(user);
@@ -114,4 +128,60 @@ export async function refreshUserCredits(): Promise<void> {
 	} catch (error) {
 		console.error('Failed to refresh credits:', error);
 	}
+}
+
+/**
+ * 刷新用户统计数据
+ */
+export async function refreshUserStats(): Promise<UserStats | null> {
+	const user = get(_user);
+	if (!user) return null;
+
+	_statsLoading.set(true);
+	try {
+		const response = await fetch('/api/user/credits/stats');
+		if (response.ok) {
+			const stats = await response.json();
+			_stats.set(stats);
+			return stats;
+		}
+		return null;
+	} catch (error) {
+		console.error('Failed to refresh stats:', error);
+		return null;
+	} finally {
+		_statsLoading.set(false);
+	}
+}
+
+/**
+ * 初始化 Dashboard 完整数据（积分余额 + 统计数据）
+ * 首次进入 dashboard 时调用
+ */
+export async function initDashboardData(): Promise<void> {
+	const user = get(_user);
+	if (!user) return;
+
+	// 并行加载积分余额和统计数据
+	await Promise.all([
+		refreshUserCredits(),
+		refreshUserStats()
+	]);
+}
+
+/**
+ * 消费积分后刷新（只刷新余额，不刷新统计）
+ */
+export async function afterCreditsConsumed(): Promise<void> {
+	await refreshUserCredits();
+}
+
+/**
+ * 获得积分后刷新（刷新余额和统计）
+ */
+export async function afterCreditsEarned(): Promise<void> {
+	await Promise.all([
+		refreshUserCredits(),
+		refreshUserStats()
+	]);
 }

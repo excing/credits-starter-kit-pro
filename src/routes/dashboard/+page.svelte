@@ -8,12 +8,6 @@
     import { goto } from "$app/navigation";
 
     let { data } = $props();
-
-    // 检查是否是管理员
-    const isAdmin = $derived(() => {
-        const adminEmails = import.meta.env.PUBLIC_ADMIN_EMAILS?.split(',').map((e: string) => e.trim()) || [];
-        return $currentUser?.email && adminEmails.includes($currentUser.email);
-    });
 </script>
 
 <section class="flex w-full flex-col items-start justify-start p-6">
@@ -32,7 +26,7 @@
                 <SectionCards />
 
                 <!-- 管理员快捷入口 -->
-                {#if isAdmin()}
+                {#if data.isAdmin }
                     <Card.Root class="border-primary/20 bg-primary/5">
                         <Card.Header>
                             <Card.Title class="flex items-center gap-2">
