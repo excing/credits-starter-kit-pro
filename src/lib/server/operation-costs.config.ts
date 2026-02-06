@@ -106,6 +106,9 @@ export type OperationType = keyof typeof OPERATION_COSTS;
  *
  * @example
  * ```typescript
+ * import { getOperationCost } from './operation-costs.config';
+ * import { calculateTokenCost } from './token-utils';
+ *
  * const config = getOperationCost('chat_usage');
  * if (config) {
  *   const cost = calculateTokenCost(1500, config);

@@ -352,25 +352,6 @@ export async function redeemCode(
     }
 }
 
-/**
- * 获取操作计费配置
- *
- * 注意：此函数现在从 TypeScript 常量获取配置，而不是数据库
- * 这样可以实现零运行时开销，完美适配无服务器环境
- */
-export { getOperationCost };
-
-/**
- * 计算 token 费用
- */
-export function calculateTokenCost(tokens: number, costConfig: OperationCostConfig): number {
-    if (costConfig.costType !== 'per_token') {
-        return costConfig.costAmount;
-    }
-
-    // 向上取整，确保即使是部分 token 块也收费
-    return Math.ceil((tokens / costConfig.costPer) * costConfig.costAmount);
-}
 
 /**
  * 获取用户交易历史

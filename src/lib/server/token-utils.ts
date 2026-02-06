@@ -1,4 +1,5 @@
 import { encoding_for_model } from 'tiktoken';
+import { getOperationCost, type OperationCostConfig } from './operation-costs.config';
 
 // ============================================================================
 // 类型定义
@@ -234,22 +235,28 @@ export function extractTokenUsage(usage?: {
 /**
  * 根据 token 数量计算积分费用
  *
- * 从计费配置中获取 per_token 类型的费率，并计算实际需要扣除的积分数量。
- * 如果操作类型不存在或不是 per_token 计费类型，则返回 0。
- *
- * **注意**：此函数使用动态导入 credits 模块以避免循环依赖。
+ * 支持两种调用方式：
+ * 1. 传入操作类型字符串：自动获取配置并计算费用
+ * 2. 传入配置对象：直接根据配置计算费用
  *
  * @param tokens - token 数量（必须为非负整数）
- * @param operationType - 操作类型标识符（如 'chat_usage'、'ai_chat' 等）
+ * @param operationTypeOrConfig - 操作类型标识符（如 'chat_usage'）或配置对象
  * @returns 需要扣除的积分数量（非负整数），如果配置不存在或类型不匹配则返回 0
  *
  * @example
  * ```typescript
  * import { calculateTokenCost } from '$server/token-utils';
  *
- * // 计算 1500 tokens 的费用
+ * // 方式1：传入操作类型字符串
  * const creditsToDeduct = calculateTokenCost(1500, 'chat_usage');
  * console.log(creditsToDeduct); // 例如：15（假设 100 tokens = 1 积分）
+ *
+ * // 方式2：传入配置对象
+ * const config = getOperationCost('chat_usage');
+ * if (config) {
+ *     const creditsToDeduct = calculateTokenCost(1500, config);
+ *     console.log(creditsToDeduct); // 15
+ * }
  *
  * // 不存在的操作类型
  * const invalid = calculateTokenCost(1000, 'invalid_type');
@@ -260,25 +267,44 @@ export function extractTokenUsage(usage?: {
  * console.log(fixed); // 0（因为 image_generation 是 fixed 类型）
  * ```
  */
-export function calculateTokenCost(tokens: number, operationType: string): number {
-    // 动态导入 credits 模块以避免循环依赖
-    const { getOperationCost, calculateTokenCost: calculateCost } = require('./credits');
+export function calculateTokenCost(tokens: number, operationType: string): number;
+export function calculateTokenCost(tokens: number, costConfig: OperationCostConfig): number;
+export function calculateTokenCost(
+    tokens: number,
+    operationTypeOrConfig: string | OperationCostConfig
+): number {
+    // 如果传入的是字符串，先获取配置
+    let costConfig: OperationCostConfig | null;
 
-    const costConfig = getOperationCost(operationType);
+    if (typeof operationTypeOrConfig === 'string') {
+        costConfig = getOperationCost(operationTypeOrConfig);
 
-    if (!costConfig) {
-        console.warn(`⚠️ 未找到操作类型 '${operationType}' 的计费配置，返回 0`);
-        return 0;
+        if (!costConfig) {
+            console.warn(`⚠️ 未找到操作类型 '${operationTypeOrConfig}' 的计费配置，返回 0`);
+            return 0;
+        }
+
+        if (costConfig.costType !== 'per_token') {
+            console.warn(
+                `⚠️ 操作类型 '${operationTypeOrConfig}' 不是 per_token 计费类型，返回 0`
+            );
+            return 0;
+        }
+    } else {
+        costConfig = operationTypeOrConfig;
     }
 
-    if (costConfig.costType !== 'per_token') {
-        console.warn(
-            `⚠️ 操作类型 '${operationType}' 不是 per_token 计费类型，返回 0`
-        );
-        return 0;
+    // 统一的计算逻辑
+    if (costConfig.costType === 'fixed') {
+        return costConfig.costAmount;
     }
 
-    return calculateCost(tokens, costConfig);
+    if (costConfig.costType === 'per_token' || costConfig.costType === 'per_unit') {
+        // 向上取整，确保即使是部分块也收费
+        return Math.ceil((tokens / costConfig.costPer) * costConfig.costAmount);
+    }
+
+    return 0;
 }
 
 /**
@@ -310,8 +336,6 @@ export function calculateTokenCost(tokens: number, operationType: string): numbe
  * ```
  */
 export function getFixedCost(operationType: string): number {
-    const { getOperationCost } = require('./credits');
-
     const costConfig = getOperationCost(operationType);
 
     if (!costConfig) {
@@ -364,8 +388,6 @@ export function getFixedCost(operationType: string): number {
  * ```
  */
 export function calculateUnitCost(units: number, operationType: string): number {
-    const { getOperationCost } = require('./credits');
-
     const costConfig = getOperationCost(operationType);
 
     if (!costConfig) {
