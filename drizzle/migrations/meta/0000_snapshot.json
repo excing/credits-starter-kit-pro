@@ -1,5 +1,5 @@
 {
-  "id": "1b0a46ac-1104-445d-9f0d-584128046cae",
+  "id": "2992bb1b-076b-411f-886d-1c563bd329b0",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -224,8 +224,7 @@
         },
         "type": {
           "name": "type",
-          "type": "transaction_type",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -304,78 +303,6 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.operation_cost": {
-      "name": "operation_cost",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "operation_type": {
-          "name": "operation_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "cost_type": {
-          "name": "cost_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "cost_amount": {
-          "name": "cost_amount",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "cost_per": {
-          "name": "cost_per",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 1000
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "metadata": {
-          "name": "metadata",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "operation_cost_operation_type_unique": {
-          "name": "operation_cost_operation_type_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "operation_type"
-          ]
-        }
-      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -930,21 +857,7 @@
       "isRLSEnabled": false
     }
   },
-  "enums": {
-    "public.transaction_type": {
-      "name": "transaction_type",
-      "schema": "public",
-      "values": [
-        "redemption",
-        "chat_usage",
-        "image_generation",
-        "purchase",
-        "subscription",
-        "admin_adjustment",
-        "refund"
-      ]
-    }
-  },
+  "enums": {},
   "schemas": {},
   "sequences": {},
   "roles": {},

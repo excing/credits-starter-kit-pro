@@ -1,4 +1,3 @@
-CREATE TYPE "public"."transaction_type" AS ENUM('redemption', 'chat_usage', 'image_generation', 'purchase', 'subscription', 'admin_adjustment', 'refund');--> statement-breakpoint
 CREATE TABLE "account" (
 	"id" text PRIMARY KEY NOT NULL,
 	"accountId" text NOT NULL,
@@ -34,7 +33,7 @@ CREATE TABLE "credit_transaction" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"user_package_id" text,
-	"type" "transaction_type" NOT NULL,
+	"type" text NOT NULL,
 	"amount" integer NOT NULL,
 	"balance_before" integer NOT NULL,
 	"balance_after" integer NOT NULL,
@@ -42,18 +41,6 @@ CREATE TABLE "credit_transaction" (
 	"metadata" text,
 	"related_id" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "operation_cost" (
-	"id" text PRIMARY KEY NOT NULL,
-	"operation_type" text NOT NULL,
-	"cost_type" text NOT NULL,
-	"cost_amount" integer NOT NULL,
-	"cost_per" integer DEFAULT 1000,
-	"is_active" boolean DEFAULT true NOT NULL,
-	"metadata" text,
-	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "operation_cost_operation_type_unique" UNIQUE("operation_type")
 );
 --> statement-breakpoint
 CREATE TABLE "rate_limit" (

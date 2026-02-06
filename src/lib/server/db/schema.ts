@@ -5,8 +5,6 @@ import {
     pgTable,
     text,
     timestamp,
-    pgEnum,
-    index
 } from 'drizzle-orm/pg-core';
 
 // Better Auth Tables
@@ -102,25 +100,14 @@ export const userCreditPackage = pgTable('user_credit_package', {
     createdAt: timestamp('created_at').notNull().defaultNow()
 });
 
-// 3. Transaction Type Enum
-export const transactionTypeEnum = pgEnum('transaction_type', [
-    'redemption',
-    'chat_usage',
-    'image_generation',
-    'purchase',
-    'subscription',
-    'admin_adjustment',
-    'refund'
-]);
-
-// 4. Credit Transaction - 积分交易记录表
+// 3. Credit Transaction - 积分交易记录表
 export const creditTransaction = pgTable('credit_transaction', {
     id: text('id').primaryKey(),
     userId: text('user_id').notNull()
         .references(() => user.id, { onDelete: 'cascade' }),
     userPackageId: text('user_package_id')
         .references(() => userCreditPackage.id, { onDelete: 'set null' }),
-    type: transactionTypeEnum('type').notNull(),
+    type: text('type').notNull(),
     amount: integer('amount').notNull(),
     balanceBefore: integer('balance_before').notNull(),
     balanceAfter: integer('balance_after').notNull(),
@@ -159,7 +146,3 @@ export const redemptionHistory = pgTable('redemption_history', {
     expiresAt: timestamp('expires_at').notNull(),
     redeemedAt: timestamp('redeemed_at').notNull().defaultNow()
 });
-
-// 注意：operation_cost 表已移除
-// 计费配置现在使用 TypeScript 常量（src/lib/server/operation-costs.config.ts）
-// 这样可以实现零运行时开销，完美适配无服务器环境

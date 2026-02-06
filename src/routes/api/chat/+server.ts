@@ -2,9 +2,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { streamText, convertToModelMessages } from 'ai';
 import { env } from '$env/dynamic/private';
 import { withCreditsStreaming } from '$lib/server/credits-middleware';
-import {
-    calculateTokenCost
-} from '$lib/server/token-utils';
+import { calculateCost } from '$lib/server/operation-costs.config';
 
 // 创建自定义 OpenAI provider，支持自定义 baseURL
 const openai = createOpenAI({
@@ -26,7 +24,7 @@ export const POST = withCreditsStreaming(
             onFinish: async ({ usage }) => {
                 try {
                     // 计算积分费用
-                    const creditsToDeduct = calculateTokenCost(1, creditContext.operationType);
+                    const creditsToDeduct = calculateCost(1, creditContext.operationType);
 
                     // 4. 调用回调函数扣费
                     await deductCredits(creditsToDeduct, {

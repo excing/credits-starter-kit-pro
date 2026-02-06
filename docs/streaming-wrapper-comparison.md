@@ -30,17 +30,10 @@ export const POST: RequestHandler = async (event) => {
     const modelMessages = await convertToModelMessages(messages);
     const modelName = env.OPENAI_MODEL || 'gemini-3-flash-preview';
 
-    let fullText = '';
-
     // 3. 执行流式响应
     const result = streamText({
         model: openai.chat(modelName),
         messages: modelMessages,
-        onChunk: ({ chunk }) => {
-            if (chunk.type === 'text-delta') {
-                fullText += chunk.text;
-            }
-        },
         onFinish: async ({ usage }) => {
             try {
                 // ... token 计算逻辑 ...
@@ -72,10 +65,11 @@ export const POST: RequestHandler = async (event) => {
 
 ---
 
-### ✅ 新方式：`withCreditsStreaming` 包装器（91 行代码）
+### ✅ 新方式：`withCreditsStreaming` 包装器（简化版 - 50 行代码）
 
 ```typescript
 import { withCreditsStreaming } from '$lib/server/credits-middleware';
+import { calculateCost } from '$lib/server/token-utils';
 
 export const POST = withCreditsStreaming(
     async ({ request, creditContext, deductCredits }) => {
@@ -84,28 +78,17 @@ export const POST = withCreditsStreaming(
         const modelMessages = await convertToModelMessages(messages);
         const modelName = env.OPENAI_MODEL || 'gemini-3-flash-preview';
 
-        let fullText = '';
-
         // 2. 执行流式响应
         const result = streamText({
             model: openai.chat(modelName),
             messages: modelMessages,
-            onChunk: ({ chunk }) => {
-                if (chunk.type === 'text-delta') {
-                    fullText += chunk.text;
-                }
-            },
             onFinish: async ({ usage }) => {
                 try {
-                    // ... token 计算逻辑 ...
+                    // 3. 计算并扣费（使用统一的 calculateCost 函数）
+                    const creditsToDeduct = calculateCost(1, creditContext.operationType);
 
-                    // 3. 调用回调函数扣费
                     await deductCredits(creditsToDeduct, {
-                        model: modelName,
-                        inputTokens,
-                        outputTokens,
-                        totalTokens,
-                        estimationMethod
+                        model: modelName
                     });
                 } catch (error) {
                     console.error('扣费失败:', error);
@@ -117,7 +100,7 @@ export const POST = withCreditsStreaming(
         return result.toUIMessageStreamResponse();
     },
     {
-        operationType: 'chat_usage',
+        operationType: 'default_usage',
         minCreditsRequired: 1
     }
 );
@@ -127,9 +110,10 @@ export const POST = withCreditsStreaming(
 - ✅ 自动处理前置检查（认证 + 余额）
 - ✅ 自动处理错误返回（401/402）
 - ✅ 自动注入 `creditContext` 和 `deductCredits` 回调
-- ✅ 代码简洁，专注业务逻辑
+- ✅ 代码简洁，专注业务逻辑（减少 48% 代码量）
 - ✅ 类型安全，编译时检查
 - ✅ 统一的 API 风格（与 `withCredits` 一致）
+- ✅ 使用统一的 `calculateCost` 函数，无需关心计费类型
 
 ---
 
@@ -162,76 +146,85 @@ onFinish: async ({ usage }) => {
 
 ## 使用场景
 
-### 1. AI 流式聊天（最常见）
+### 1. AI 流式聊天（固定费用 - 最简单）
 
 ```typescript
 export const POST = withCreditsStreaming(
-    async ({ request, deductCredits }) => {
+    async ({ request, creditContext, deductCredits }) => {
         const { messages } = await request.json();
-        let fullText = '';
 
         const result = streamText({
             model: openai.chat('gpt-4'),
             messages,
-            onChunk: ({ chunk }) => {
-                if (chunk.type === 'text-delta') {
-                    fullText += chunk.text;
-                }
-            },
-            onFinish: async ({ usage }) => {
-                const totalTokens = usage.totalTokens || estimateTokens(fullText);
-                const creditsToDeduct = calculateTokenCost(totalTokens, 'chat_usage');
-
-                await deductCredits(creditsToDeduct, {
-                    model: 'gpt-4',
-                    tokens: totalTokens
-                });
+            onFinish: async () => {
+                // 固定费用：每次对话 1 积分
+                await deductCredits(
+                    calculateCost(1, creditContext.operationType),
+                    { model: 'gpt-4' }
+                );
             }
         });
 
         return result.toUIMessageStreamResponse();
     },
-    { operationType: 'chat_usage', minCreditsRequired: 1 }
+    { operationType: 'default_usage', minCreditsRequired: 1 }
 );
 ```
 
 ---
 
-### 2. 语音合成流式响应
+### 2. 图片生成（固定费用）
 
 ```typescript
 export const POST = withCreditsStreaming(
     async ({ request, deductCredits }) => {
-        const { text } = await request.json();
-        let audioLength = 0;
+        const { prompt } = await request.json();
 
-        const stream = synthesizeSpeech(text, {
-            onProgress: (bytes) => {
-                audioLength += bytes;
-            },
-            onComplete: async () => {
-                // 按音频长度计费
-                const seconds = audioLength / 16000;
-                const creditsToDeduct = Math.ceil(seconds * 0.1);
-
-                await deductCredits(creditsToDeduct, {
-                    audioLength,
-                    duration: seconds
-                });
+        const result = generateImage(prompt, {
+            onComplete: async (imageUrl) => {
+                // 固定费用：每张图片 5 积分
+                await deductCredits(
+                    calculateCost(1, 'image_generation'),
+                    { prompt, imageUrl }
+                );
             }
         });
 
-        return new Response(stream, {
-            headers: { 'Content-Type': 'audio/mpeg' }
-        });
+        return result.toResponse();
     },
-    { operationType: 'speech_synthesis', minCreditsRequired: 1 }
+    { operationType: 'image_generation', minCreditsRequired: 5 }
 );
 ```
 
 ---
 
-### 3. 条件扣费（根据结果决定）
+### 3. 文件处理（按单位计费）
+
+```typescript
+export const POST = withCreditsStreaming(
+    async ({ request, deductCredits }) => {
+        const formData = await request.formData();
+        const files = formData.getAll('files');
+
+        const result = processFiles(files, {
+            onComplete: async () => {
+                // 按文件数量计费：2 积分/文件
+                await deductCredits(
+                    calculateCost(files.length, 'file_processing'),
+                    { fileCount: files.length }
+                );
+            }
+        });
+
+        return result.toResponse();
+    },
+    { operationType: 'file_processing', minCreditsRequired: 2 }
+);
+```
+
+---
+
+### 4. 条件扣费（根据结果决定）
 
 ```typescript
 export const POST = withCreditsStreaming(
@@ -259,7 +252,7 @@ export const POST = withCreditsStreaming(
 
 ---
 
-### 4. 不扣费的流式响应（仅认证）
+### 5. 不扣费的流式响应（仅认证）
 
 ```typescript
 export const GET = withCreditsStreaming(
@@ -338,23 +331,29 @@ export function withCreditsStreaming(
 
 1. **在流结束时扣费**
    ```typescript
-   onFinish: async ({ usage }) => {
+   onFinish: async () => {
        await deductCredits(amount, metadata);
    }
    ```
 
-2. **记录详细的元数据**
+2. **使用统一的 calculateCost 函数**
+   ```typescript
+   // ✅ 推荐：使用 calculateCost
+   const creditsToDeduct = calculateCost(amount, operationType);
+
+   // ❌ 避免：手动计算
+   const creditsToDeduct = Math.ceil(amount / 1000);
+   ```
+
+3. **记录详细的元数据**
    ```typescript
    await deductCredits(creditsToDeduct, {
        model: 'gpt-4',
-       inputTokens: 100,
-       outputTokens: 200,
-       totalTokens: 300,
-       estimationMethod: 'api_usage'
+       operationType: 'chat_usage'
    });
    ```
 
-3. **处理扣费失败**
+4. **处理扣费失败**
    ```typescript
    try {
        await deductCredits(amount, metadata);
@@ -364,7 +363,7 @@ export function withCreditsStreaming(
    }
    ```
 
-4. **条件扣费**
+5. **条件扣费**
    ```typescript
    if (hasResults) {
        await deductCredits(amount, metadata);
@@ -385,8 +384,8 @@ export function withCreditsStreaming(
 2. **忘记调用 deductCredits**
    ```typescript
    // ❌ 错误：没有扣费
-   onFinish: async ({ usage }) => {
-       const amount = calculateCost(usage);
+   onFinish: async () => {
+       const amount = calculateCost(1, 'chat_usage');
        // 忘记调用 deductCredits
    }
    ```
@@ -399,21 +398,32 @@ export function withCreditsStreaming(
    }
    ```
 
+4. **手动计算费用**
+   ```typescript
+   // ❌ 错误：手动计算，容易出错
+   const creditsToDeduct = Math.ceil(tokens / 1000);
+
+   // ✅ 正确：使用 calculateCost
+   const creditsToDeduct = calculateCost(tokens, 'chat_usage');
+   ```
+
 ---
 
 ## 总结
 
 `withCreditsStreaming` 是一个**优雅、灵活、类型安全**的流式响应包装器：
 
-✅ **简化代码**：减少样板代码，专注业务逻辑
+✅ **简化代码**：减少样板代码，专注业务逻辑（减少 48% 代码量）
 ✅ **自动化**：自动处理前置检查和错误返回
 ✅ **灵活控制**：通过回调函数自主控制扣费时机
 ✅ **类型安全**：完整的 TypeScript 类型支持
 ✅ **统一风格**：与 `withCredits` 保持一致的 API 设计
+✅ **统一计费**：使用 `calculateCost` 函数，无需关心计费类型
 
 **推荐使用场景**：
-- AI 流式聊天
-- 语音合成
-- 视频流处理
+- AI 流式聊天（固定费用或按 token 计费）
+- 图片生成（固定费用）
+- 文件处理（按单位计费）
 - 实时数据流
 - 任何需要流式响应的 API
+
