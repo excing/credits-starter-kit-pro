@@ -9,8 +9,7 @@
 	import { Settings2 } from "lucide-svelte";
     import { toast } from "svelte-sonner";
     import {
-        authLoaded,
-        currentUser,
+        authState,
         patchCurrentUser,
     } from "$lib/stores/auth";
 
@@ -21,8 +20,8 @@
         image?: string | null;
     }
 
-    let user = $derived($currentUser as User | null);
-    let loading = $derived(!$authLoaded);
+    let user = $derived($authState.user as User | null);
+    let loading = $derived(!$authState.loaded);
     // Profile form states
     let name = $state("");
     let email = $state("");
@@ -33,10 +32,10 @@
     let uploadingImage = $state(false);
 
     $effect(() => {
-        if (!$authLoaded || didInitForm) return;
-        if ($currentUser) {
-            name = ($currentUser as any)?.name || "";
-            email = ($currentUser as any)?.email || "";
+        if (!$authState.loaded || didInitForm) return;
+        if ($authState.user) {
+            name = ($authState.user as any)?.name || "";
+            email = ($authState.user as any)?.email || "";
             didInitForm = true;
         }
     });

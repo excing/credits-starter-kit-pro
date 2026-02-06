@@ -6,7 +6,7 @@
     import { Loader2 } from "lucide-svelte";
     import { goto } from "$app/navigation";
 	    import type { AuthUser } from "$lib/stores/auth";
-	    import { authLoaded, clearAuthState, currentUser } from "$lib/stores/auth";
+	    import { authState, clearAuthState } from "$lib/stores/auth";
 
 	    type UserInfo = AuthUser;
 
@@ -16,12 +16,12 @@
 
     let { mini = false }: Props = $props();
 
-	    let userInfo = $derived($currentUser as UserInfo | null);
-	    let loading = $derived(!$authLoaded);
+	    let userInfo = $derived($authState.user as UserInfo | null);
+	    let loading = $derived(!$authState.loaded);
     let error = $state<string | null>(null);
 
 	    $effect(() => {
-	        if (browser && $authLoaded && !$currentUser) {
+	        if (browser && $authState.loaded && !$authState.user) {
 	            goto("/sign-in");
 	        }
 	    });

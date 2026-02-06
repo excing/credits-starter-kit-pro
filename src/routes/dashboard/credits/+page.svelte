@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { currentUser, userStats, statsLoading, afterCreditsEarned } from "$lib/stores/auth";
+    import { authState, statsState, afterCreditsEarned } from "$lib/stores/auth";
     import * as Card from "$lib/components/ui/card";
     import * as Dialog from "$lib/components/ui/dialog";
     import * as Table from "$lib/components/ui/table";
@@ -115,18 +115,18 @@
     </div>
 
     <!-- 积分统计卡片 -->
-    {#if $userStats}
+    {#if $statsState.data}
         <div class="grid gap-4 md:grid-cols-3">
             <Card.Root>
                 <Card.Header>
                     <Card.Title class="text-sm font-medium">总获得</Card.Title>
                 </Card.Header>
                 <Card.Content>
-                    {#if $statsLoading}
+                    {#if $statsState.loading}
                         <Skeleton class="h-8 w-24" />
                     {:else}
                         <div class="text-2xl font-bold text-green-600">
-                            +{$userStats.totalEarned}
+                            +{$statsState.data.totalEarned}
                         </div>
                         <p class="text-xs text-muted-foreground mt-1">
                             累计获得积分
@@ -140,11 +140,11 @@
                     <Card.Title class="text-sm font-medium">总消费</Card.Title>
                 </Card.Header>
                 <Card.Content>
-                    {#if $statsLoading}
+                    {#if $statsState.loading}
                         <Skeleton class="h-8 w-24" />
                     {:else}
                         <div class="text-2xl font-bold text-red-600">
-                            -{$userStats.totalSpent}
+                            -{$statsState.data.totalSpent}
                         </div>
                         <p class="text-xs text-muted-foreground mt-1">
                             累计消费积分
@@ -158,11 +158,11 @@
                     <Card.Title class="text-sm font-medium">即将过期</Card.Title>
                 </Card.Header>
                 <Card.Content>
-                    {#if $statsLoading}
+                    {#if $statsState.loading}
                         <Skeleton class="h-8 w-24" />
                     {:else}
                         <div class="text-2xl font-bold text-orange-600">
-                            {$userStats.expiringPackages.reduce((sum: number, pkg: any) => sum + pkg.creditsRemaining, 0)}
+                            {$statsState.data.expiringPackages.reduce((sum: number, pkg: any) => sum + pkg.creditsRemaining, 0)}
                         </div>
                         <p class="text-xs text-muted-foreground mt-1">
                             30天内过期积分
@@ -187,10 +187,10 @@
                     <Skeleton class="h-12 w-32" />
                 {:else}
                     <div class="text-4xl font-bold text-primary">
-                        {$currentUser?.credits ?? 0}
+                        {$authState.user?.credits ?? 0}
                     </div>
                     <p class="text-sm text-muted-foreground mt-2">
-                        来自 {$currentUser?.activePackages ?? 0} 个有效套餐
+                        来自 {$authState.user?.activePackages ?? 0} 个有效套餐
                     </p>
                 {/if}
             </Card.Content>
@@ -222,7 +222,7 @@
     </div>
 
     <!-- 即将过期提醒 -->
-    {#if $userStats && $userStats.expiringPackages.length > 0}
+    {#if $statsState.data && $statsState.data.expiringPackages.length > 0}
         <Card.Root class="border-orange-200 bg-orange-50 dark:bg-orange-900/10">
             <Card.Header>
                 <Card.Title class="flex items-center gap-2 text-orange-800 dark:text-orange-400">
@@ -233,7 +233,7 @@
             </Card.Header>
             <Card.Content>
                 <div class="space-y-2">
-                    {#each $userStats.expiringPackages as pkg}
+                    {#each $statsState.data.expiringPackages as pkg}
                         <div class="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded">
                             <div>
                                 <p class="text-sm font-medium">

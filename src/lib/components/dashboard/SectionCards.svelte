@@ -6,12 +6,12 @@
         Coins,
         Package,
     } from "lucide-svelte";
-    import { currentUser, userStats, statsLoading } from "$lib/stores/auth";
+    import { authState, statsState } from "$lib/stores/auth";
 
     const cards = $derived([
         {
             title: "可用积分",
-            value: $currentUser?.credits?.toString() ?? "0",
+            value: $authState.user?.credits?.toString() ?? "0",
             change: "查看详情",
             trending: "up",
             icon: Coins,
@@ -19,7 +19,7 @@
         },
         {
             title: "有效套餐",
-            value: $currentUser?.activePackages?.toString() ?? "0",
+            value: $authState.user?.activePackages?.toString() ?? "0",
             change: "个套餐",
             trending: "neutral",
             icon: Package,
@@ -27,14 +27,14 @@
         },
         {
             title: "总消费",
-            value: $userStats?.totalSpent?.toString() ?? "0",
+            value: $statsState.data?.totalSpent?.toString() ?? "0",
             change: "积分",
             trending: "neutral",
             icon: Activity,
         },
         {
             title: "总获得",
-            value: $userStats?.totalEarned?.toString() ?? "0",
+            value: $statsState.data?.totalEarned?.toString() ?? "0",
             change: "积分",
             trending: "neutral",
             icon: TrendingUp,
@@ -53,7 +53,7 @@
                 <card.icon class="text-muted-foreground h-4 w-4" />
             </Card.Header>
             <Card.Content>
-                {#if $statsLoading}
+                {#if $statsState.loading}
                     <div class="h-8 w-24 bg-muted animate-pulse rounded"></div>
                 {:else}
                     <div class="text-2xl font-bold">{card.value}</div>

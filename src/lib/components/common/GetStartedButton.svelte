@@ -1,8 +1,7 @@
 <script lang="ts">
     import { Button } from "$lib/components/ui/button";
 	    import {
-	        authLoaded,
-	        currentUser,
+	        authState,
 	        ensureCurrentUserLoaded,
 	    } from "$lib/stores/auth";
     import { goto } from "$app/navigation";
@@ -22,15 +21,15 @@
         [key: string]: any;
     }>();
 
-	    let isAuthenticated = $derived($authLoaded ? !!$currentUser : null);
+	    let isAuthenticated = $derived($authState.loaded ? !!$authState.user : null);
 
 	    async function handleClick(e: MouseEvent) {
-	        if (!$authLoaded) {
+	        if (!$authState.loaded) {
 	            // If the user clicks before layout data initializes, resolve once.
 	            await ensureCurrentUserLoaded();
 	        }
 
-	        if (!$currentUser) {
+	        if (!$authState.user) {
             e.preventDefault();
             goto("/sign-in");
             return;

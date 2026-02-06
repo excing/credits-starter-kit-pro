@@ -4,7 +4,7 @@
     import * as Card from "$lib/components/ui/card";
     import { Button } from "$lib/components/ui/button";
     import { ShieldCheck, Gift } from "lucide-svelte";
-    import { currentUser } from "$lib/stores/auth";
+    import { authState } from "$lib/stores/auth";
     import { goto } from "$app/navigation";
 
     let { data } = $props();

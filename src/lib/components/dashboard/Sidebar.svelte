@@ -11,7 +11,7 @@
         Coins,
         ShieldCheck,
     } from "lucide-svelte";
-    import { currentUser } from "$lib/stores/auth";
+    import { authState } from "$lib/stores/auth";
 
     interface NavItem {
         label: string;
@@ -106,7 +106,7 @@
                             <Coins class="h-4 w-4 text-primary" />
                             <span class="text-sm font-medium">积分余额</span>
                         </div>
-                        <span class="text-sm font-bold text-primary">{$currentUser?.credits ?? 0}</span>
+                        <span class="text-sm font-bold text-primary">{$authState.user?.credits ?? 0}</span>
                     </a>
                 </div>
                 <div class="px-4">

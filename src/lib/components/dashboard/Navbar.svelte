@@ -12,7 +12,7 @@
         Coins,
         ShieldCheck,
     } from "lucide-svelte";
-    import { currentUser } from "$lib/stores/auth";
+    import { authState } from "$lib/stores/auth";
     import { page } from "$app/stores";
 
     import type { Snippet } from "svelte";
@@ -107,7 +107,7 @@
                 class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
             >
                 <Coins class="h-4 w-4 text-primary" />
-                <span class="text-sm font-medium">{$currentUser?.credits ?? 0}</span>
+                <span class="text-sm font-medium">{$authState.user?.credits ?? 0}</span>
             </a>
             <UserProfile mini={true} />
         </div>

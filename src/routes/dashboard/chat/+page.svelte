@@ -3,7 +3,7 @@
     import { Input } from "$lib/components/ui/input";
     import { cn } from "$lib/utils";
     import { Chat } from "@ai-sdk/svelte";
-    import { currentUser, afterCreditsConsumed } from "$lib/stores/auth";
+    import { authState, afterCreditsConsumed } from "$lib/stores/auth";
     import { AlertCircle } from "lucide-svelte";
     import { toast } from "svelte-sonner";
     import { goto } from "$app/navigation";
@@ -42,7 +42,7 @@
 
 <div class="flex w-full flex-col items-center justify-center py-24">
     <!-- 积分余额提示 -->
-    {#if $currentUser?.credits !== undefined && $currentUser.credits < 10}
+    {#if $authState.user?.credits !== undefined && $authState.user.credits < 10}
         <div class="mb-4 w-full max-w-xl">
             <div
                 class="flex items-start gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg"
@@ -53,7 +53,7 @@
                         积分余额不足
                     </p>
                     <p class="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                        当前余额: {$currentUser.credits} 积分。
+                        当前余额: {$authState.user.credits} 积分。
                         <a
                             href="/dashboard/credits"
                             class="underline font-medium hover:text-yellow-900 dark:hover:text-yellow-100"

@@ -1,4 +1,4 @@
-import { writable, get, derived } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import { authClient } from '$lib/auth-client';
 
 export type AuthUser = {
@@ -52,15 +52,7 @@ const _statsState = writable<StatsState>({
 
 let inFlight: Promise<AuthUser | null> | null = null;
 
-// 导出简洁的 derived stores（保持 API 兼容性）
-export const currentUser = derived(_authState, ($state) => $state.user);
-export const authLoaded = derived(_authState, ($state) => $state.loaded);
-export const authLoading = derived(_authState, ($state) => $state.loading);
-export const userStats = derived(_statsState, ($state) => $state.data);
-export const statsLoading = derived(_statsState, ($state) => $state.loading);
-export const statsLoaded = derived(_statsState, ($state) => $state.loaded);
-
-// 也可以导出完整的状态对象（可选）
+// 导出完整的状态对象
 export const authState = { subscribe: _authState.subscribe };
 export const statsState = { subscribe: _statsState.subscribe };
 
