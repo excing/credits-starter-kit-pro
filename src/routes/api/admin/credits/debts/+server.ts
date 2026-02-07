@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { creditDebt } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, count, desc } from 'drizzle-orm';
 import { isAdmin } from '$server/auth-utils';
 
 /**
@@ -27,31 +27,52 @@ export const GET: RequestHandler = async ({ locals, url }) => {
         const offset = parseInt(url.searchParams.get('offset') || '0');
 
         let debts;
+        let totalCount;
 
         // 根据settled参数过滤
         if (settled === 'true') {
-            debts = await db
-                .select()
-                .from(creditDebt)
-                .where(eq(creditDebt.isSettled, true))
-                .limit(limit)
-                .offset(offset)
-                .orderBy(creditDebt.createdAt);
+            [debts, totalCount] = await Promise.all([
+                db
+                    .select()
+                    .from(creditDebt)
+                    .where(eq(creditDebt.isSettled, true))
+                    .limit(limit)
+                    .offset(offset)
+                    .orderBy(desc(creditDebt.createdAt)),
+                db
+                    .select({ count: count() })
+                    .from(creditDebt)
+                    .where(eq(creditDebt.isSettled, true))
+                    .then(result => result[0].count)
+            ]);
         } else if (settled === 'false') {
-            debts = await db
-                .select()
-                .from(creditDebt)
-                .where(eq(creditDebt.isSettled, false))
-                .limit(limit)
-                .offset(offset)
-                .orderBy(creditDebt.createdAt);
+            [debts, totalCount] = await Promise.all([
+                db
+                    .select()
+                    .from(creditDebt)
+                    .where(eq(creditDebt.isSettled, false))
+                    .limit(limit)
+                    .offset(offset)
+                    .orderBy(desc(creditDebt.createdAt)),
+                db
+                    .select({ count: count() })
+                    .from(creditDebt)
+                    .where(eq(creditDebt.isSettled, false))
+                    .then(result => result[0].count)
+            ]);
         } else {
-            debts = await db
-                .select()
-                .from(creditDebt)
-                .limit(limit)
-                .offset(offset)
-                .orderBy(creditDebt.createdAt);
+            [debts, totalCount] = await Promise.all([
+                db
+                    .select()
+                    .from(creditDebt)
+                    .limit(limit)
+                    .offset(offset)
+                    .orderBy(desc(creditDebt.createdAt)),
+                db
+                    .select({ count: count() })
+                    .from(creditDebt)
+                    .then(result => result[0].count)
+            ]);
         }
 
         return json({
@@ -59,7 +80,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
                 ...d,
                 metadata: d.metadata ? JSON.parse(d.metadata) : null
             })),
-            total: debts.length,
+            total: totalCount,
             limit,
             offset
         });

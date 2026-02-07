@@ -4,13 +4,14 @@
     import * as Card from "$lib/components/ui/card";
     import * as Dialog from "$lib/components/ui/dialog";
     import * as Table from "$lib/components/ui/table";
+    import * as Tabs from "$lib/components/ui/tabs";
     import * as Select from "$lib/components/ui/select";
     import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
     import { Badge } from "$lib/components/ui/badge";
     import { Skeleton } from "$lib/components/ui/skeleton";
-    import { ShieldCheck, Gift, Package, Copy, Check, Plus, Edit, Trash2, TrendingUp, Users, AlertCircle, DollarSign } from "lucide-svelte";
+    import { ShieldCheck, Gift, Package, Copy, Check, Plus, Edit, Trash2, TrendingUp, Users, AlertCircle, DollarSign, ChevronLeft, ChevronRight, History } from "lucide-svelte";
     import { toast } from "svelte-sonner";
     import { Textarea } from "$lib/components/ui/textarea";
 
@@ -22,11 +23,33 @@
     let packages = $state<any[]>([]);
     let generatedCodes = $state<string[]>([]);
     let copied = $state(false);
+
+    // 兑换码相关状态
     let codesLoading = $state(true);
+    let codesInitialized = $state(false);
     let redemptionCodes = $state<any[]>([]);
+    let codesPage = $state(1);
+    let codesLimit = $state(10);
+    let codesTotal = $state(0);
+
+    // 兑换历史相关状态
+    let historyLoading = $state(false);
+    let historyInitialized = $state(false);
+    let redemptionHistory = $state<any[]>([]);
+    let historyPage = $state(1);
+    let historyLimit = $state(20);
+    let historyTotal = $state(0);
+
+    // 欠费相关状态
     let debtsLoading = $state(true);
+    let debtsInitialized = $state(false);
     let debts = $state<any[]>([]);
     let debtFilter = $state<'all' | 'unsettled' | 'settled'>('unsettled');
+    let prevDebtFilter = $state<'all' | 'unsettled' | 'settled'>('unsettled');
+    let debtsPage = $state(1);
+    let debtsLimit = $state(20);
+    let debtsTotal = $state(0);
+
     let statsLoading = $state(true);
     let stats = $state<any>({
         totalPackages: 0,
@@ -34,6 +57,9 @@
         totalDebts: 0,
         unsettledDebts: 0
     });
+
+    // Tab状态
+    let codesTab = $state<'codes' | 'history'>('codes');
 
     // 表单数据 - 生成兑换码
     let selectedPackageId = $state("");
@@ -80,10 +106,12 @@
     async function loadRedemptionCodes() {
         codesLoading = true;
         try {
-            const res = await fetch("/api/admin/credits/codes");
+            const offset = (codesPage - 1) * codesLimit;
+            const res = await fetch(`/api/admin/credits/codes?limit=${codesLimit}&offset=${offset}`);
             if (res.ok) {
                 const data = await res.json();
                 redemptionCodes = data.codes;
+                codesTotal = data.total;
             } else {
                 toast.error("加载兑换码失败");
             }
@@ -95,16 +123,45 @@
         }
     }
 
+    // 加载兑换历史
+    async function loadRedemptionHistory() {
+        historyLoading = true;
+        try {
+            const offset = (historyPage - 1) * historyLimit;
+            const res = await fetch(`/api/admin/credits/codes/history?limit=${historyLimit}&offset=${offset}`);
+            if (res.ok) {
+                const data = await res.json();
+                redemptionHistory = data.history;
+                historyTotal = data.total;
+            } else {
+                toast.error("加载兑换历史失败");
+            }
+        } catch (error) {
+            console.error("加载兑换历史失败:", error);
+            toast.error("加载失败");
+        } finally {
+            historyLoading = false;
+        }
+    }
+
     // 加载欠费列表
     async function loadDebts() {
         debtsLoading = true;
         try {
             const settled = debtFilter === 'all' ? undefined : debtFilter === 'settled' ? 'true' : 'false';
-            const url = settled ? `/api/admin/credits/debts?settled=${settled}` : '/api/admin/credits/debts';
-            const res = await fetch(url);
+            const offset = (debtsPage - 1) * debtsLimit;
+            const params = new URLSearchParams({
+                limit: debtsLimit.toString(),
+                offset: offset.toString()
+            });
+            if (settled) {
+                params.append('settled', settled);
+            }
+            const res = await fetch(`/api/admin/credits/debts?${params}`);
             if (res.ok) {
                 const data = await res.json();
                 debts = data.debts;
+                debtsTotal = data.total;
             } else {
                 toast.error("加载欠费记录失败");
             }
@@ -140,10 +197,43 @@
         }
     }
 
-    // 监听过滤器变化
+    // 监听兑换码（初始化或分页变化）
     $effect(() => {
-        if (debtFilter) {
+        const page = codesPage; // 跟踪依赖
+        if (codesInitialized) {
+            loadRedemptionCodes();
+        }
+    });
+
+    // 监听兑换历史页码变化
+    $effect(() => {
+        const page = historyPage; // 跟踪依赖
+        if (historyInitialized) {
+            loadRedemptionHistory();
+        }
+    });
+
+    // 监听欠费（初始化、筛选或分页变化）
+    $effect(() => {
+        const filter = debtFilter; // 跟踪依赖
+        const page = debtsPage; // 跟踪依赖
+        if (debtsInitialized) {
+            // 筛选器变化时重置页码
+            if (filter !== prevDebtFilter) {
+                prevDebtFilter = filter;
+                if (page !== 1) {
+                    debtsPage = 1;
+                    return; // 页码变化会再次触发此 effect
+                }
+            }
             loadDebts();
+        }
+    });
+
+    // 监听Tab切换
+    $effect(() => {
+        if (codesTab === 'history' && !historyInitialized) {
+            historyInitialized = true;
         }
     });
 
@@ -444,8 +534,10 @@
 
     onMount(() => {
         loadPackages();
-        loadRedemptionCodes();
-        loadDebts();
+
+        // 设置初始化标志，$effect 会响应并加载
+        codesInitialized = true;
+        debtsInitialized = true;
     });
 </script>
 
@@ -737,108 +829,292 @@
                     </Table.Body>
                 </Table.Root>
             {/if}
+
+            <!-- 欠费分页控件 -->
+            {#if debtsTotal > debtsLimit}
+                <div class="flex items-center justify-between mt-4">
+                    <div class="text-sm text-muted-foreground">
+                        显示 {(debtsPage - 1) * debtsLimit + 1} - {Math.min(debtsPage * debtsLimit, debtsTotal)} 条，共 {debtsTotal} 条
+                    </div>
+                    <div class="flex gap-2">
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={debtsPage === 1}
+                            onclick={() => debtsPage--}
+                        >
+                            <ChevronLeft class="h-4 w-4" />
+                            上一页
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={debtsPage * debtsLimit >= debtsTotal}
+                            onclick={() => debtsPage++}
+                        >
+                            下一页
+                            <ChevronRight class="h-4 w-4" />
+                        </Button>
+                    </div>
+                </div>
+            {/if}
         </Card.Content>
     </Card.Root>
 
-    <!-- 兑换码列表 -->
+    <!-- 兑换码管理 -->
     <Card.Root>
         <Card.Header>
             <Card.Title class="flex items-center gap-2">
                 <Gift class="h-5 w-5" />
                 兑换码管理
             </Card.Title>
-            <Card.Description>查看和管理所有兑换码</Card.Description>
+            <Card.Description>查看和管理所有兑换码及兑换历史</Card.Description>
         </Card.Header>
         <Card.Content>
-            {#if codesLoading}
-                <div class="space-y-2">
-                    <Skeleton class="h-16 w-full" />
-                    <Skeleton class="h-16 w-full" />
-                    <Skeleton class="h-16 w-full" />
-                </div>
-            {:else if redemptionCodes.length === 0}
-                <p class="text-center text-muted-foreground py-8">
-                    暂无兑换码
-                </p>
-            {:else}
-                <Table.Root>
-                    <Table.Header>
-                        <Table.Row>
-                            <Table.Head>兑换码</Table.Head>
-                            <Table.Head>套餐</Table.Head>
-                            <Table.Head>使用情况</Table.Head>
-                            <Table.Head>过期时间</Table.Head>
-                            <Table.Head>状态</Table.Head>
-                            <Table.Head class="text-right">操作</Table.Head>
-                        </Table.Row>
-                    </Table.Header>
-                    <Table.Body>
-                        {#each redemptionCodes as code}
-                            <Table.Row>
-                                <Table.Cell class="font-mono text-xs">
-                                    <div class="flex items-center gap-2">
-                                        <span class="truncate max-w-[200px]">{code.code}</span>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onclick={() => copySingleCode(code.code)}
-                                        >
-                                            <Copy class="h-3 w-3" />
-                                        </Button>
+            <Tabs.Root bind:value={codesTab}>
+                <Tabs.List class="grid w-full grid-cols-2">
+                    <Tabs.Trigger value="codes">
+                        <Gift class="mr-2 h-4 w-4" />
+                        兑换码列表
+                    </Tabs.Trigger>
+                    <Tabs.Trigger value="history">
+                        <History class="mr-2 h-4 w-4" />
+                        兑换历史
+                    </Tabs.Trigger>
+                </Tabs.List>
+
+                <!-- 兑换码列表 Tab -->
+                <Tabs.Content value="codes" class="mt-4">
+                    {#if codesLoading}
+                        <div class="space-y-2">
+                            <Skeleton class="h-16 w-full" />
+                            <Skeleton class="h-16 w-full" />
+                            <Skeleton class="h-16 w-full" />
+                        </div>
+                    {:else if redemptionCodes.length === 0}
+                        <p class="text-center text-muted-foreground py-8">
+                            暂无兑换码
+                        </p>
+                    {:else}
+                        <div class="space-y-4">
+                            <Table.Root>
+                                <Table.Header>
+                                    <Table.Row>
+                                        <Table.Head>兑换码</Table.Head>
+                                        <Table.Head>套餐</Table.Head>
+                                        <Table.Head>使用情况</Table.Head>
+                                        <Table.Head>过期时间</Table.Head>
+                                        <Table.Head>状态</Table.Head>
+                                        <Table.Head class="text-right">操作</Table.Head>
+                                    </Table.Row>
+                                </Table.Header>
+                                <Table.Body>
+                                    {#each redemptionCodes as code}
+                                        <Table.Row>
+                                            <Table.Cell class="font-mono text-xs">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="truncate max-w-[200px]">{code.code}</span>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onclick={() => copySingleCode(code.code)}
+                                                    >
+                                                        <Copy class="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            </Table.Cell>
+                                            <Table.Cell>
+                                                <div class="text-sm">
+                                                    <div class="font-medium">{code.package?.name || '未知套餐'}</div>
+                                                    <div class="text-muted-foreground text-xs">
+                                                        {code.package?.credits || 0} 积分
+                                                    </div>
+                                                </div>
+                                            </Table.Cell>
+                                            <Table.Cell>
+                                                <div class="text-sm">
+                                                    {code.usedCount} / {code.maxUses === -1 ? '∞' : code.maxUses}
+                                                </div>
+                                            </Table.Cell>
+                                            <Table.Cell>
+                                                <div class="text-sm">
+                                                    {new Date(code.expiresAt).toLocaleDateString('zh-CN')}
+                                                </div>
+                                            </Table.Cell>
+                                            <Table.Cell>
+                                                <Badge
+                                                    variant={code.isActive && new Date(code.expiresAt) > new Date()
+                                                        ? "default"
+                                                        : "secondary"}
+                                                >
+                                                    {code.isActive
+                                                        ? (new Date(code.expiresAt) > new Date() ? "有效" : "已过期")
+                                                        : "已禁用"}
+                                                </Badge>
+                                            </Table.Cell>
+                                            <Table.Cell class="text-right">
+                                                <div class="flex justify-end gap-2">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onclick={() => toggleCodeStatus(code.id, code.isActive)}
+                                                    >
+                                                        {code.isActive ? "禁用" : "启用"}
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onclick={() => deleteCode(code.id)}
+                                                    >
+                                                        <Trash2 class="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            </Table.Cell>
+                                        </Table.Row>
+                                    {/each}
+                                </Table.Body>
+                            </Table.Root>
+
+                            <!-- 兑换码分页控件 -->
+                            {#if codesTotal > codesLimit}
+                                <div class="flex items-center justify-between">
+                                    <div class="text-sm text-muted-foreground">
+                                        显示 {(codesPage - 1) * codesLimit + 1} - {Math.min(codesPage * codesLimit, codesTotal)} 条，共 {codesTotal} 条
                                     </div>
-                                </Table.Cell>
-                                <Table.Cell>
-                                    <div class="text-sm">
-                                        <div class="font-medium">{code.package?.name || '未知套餐'}</div>
-                                        <div class="text-muted-foreground text-xs">
-                                            {code.package?.credits || 0} 积分
-                                        </div>
-                                    </div>
-                                </Table.Cell>
-                                <Table.Cell>
-                                    <div class="text-sm">
-                                        {code.usedCount} / {code.maxUses === -1 ? '∞' : code.maxUses}
-                                    </div>
-                                </Table.Cell>
-                                <Table.Cell>
-                                    <div class="text-sm">
-                                        {new Date(code.expiresAt).toLocaleDateString('zh-CN')}
-                                    </div>
-                                </Table.Cell>
-                                <Table.Cell>
-                                    <Badge
-                                        variant={code.isActive && new Date(code.expiresAt) > new Date()
-                                            ? "default"
-                                            : "secondary"}
-                                    >
-                                        {code.isActive
-                                            ? (new Date(code.expiresAt) > new Date() ? "有效" : "已过期")
-                                            : "已禁用"}
-                                    </Badge>
-                                </Table.Cell>
-                                <Table.Cell class="text-right">
-                                    <div class="flex justify-end gap-2">
+                                    <div class="flex gap-2">
                                         <Button
                                             size="sm"
                                             variant="outline"
-                                            onclick={() => toggleCodeStatus(code.id, code.isActive)}
+                                            disabled={codesPage === 1}
+                                            onclick={() => codesPage--}
                                         >
-                                            {code.isActive ? "禁用" : "启用"}
+                                            <ChevronLeft class="h-4 w-4" />
+                                            上一页
                                         </Button>
                                         <Button
                                             size="sm"
                                             variant="outline"
-                                            onclick={() => deleteCode(code.id)}
+                                            disabled={codesPage * codesLimit >= codesTotal}
+                                            onclick={() => codesPage++}
                                         >
-                                            <Trash2 class="h-3 w-3" />
+                                            下一页
+                                            <ChevronRight class="h-4 w-4" />
                                         </Button>
                                     </div>
-                                </Table.Cell>
-                            </Table.Row>
-                        {/each}
-                    </Table.Body>
-                </Table.Root>
-            {/if}
+                                </div>
+                            {/if}
+                        </div>
+                    {/if}
+                </Tabs.Content>
+
+                <!-- 兑换历史 Tab -->
+                <Tabs.Content value="history" class="mt-4">
+                    {#if historyLoading}
+                        <div class="space-y-2">
+                            <Skeleton class="h-16 w-full" />
+                            <Skeleton class="h-16 w-full" />
+                            <Skeleton class="h-16 w-full" />
+                        </div>
+                    {:else if redemptionHistory.length === 0}
+                        <p class="text-center text-muted-foreground py-8">
+                            暂无兑换历史
+                        </p>
+                    {:else}
+                        <div class="space-y-4">
+                            <Table.Root>
+                                <Table.Header>
+                                    <Table.Row>
+                                        <Table.Head>兑换码</Table.Head>
+                                        <Table.Head>用户</Table.Head>
+                                        <Table.Head>套餐</Table.Head>
+                                        <Table.Head>获得积分</Table.Head>
+                                        <Table.Head>兑换时间</Table.Head>
+                                        <Table.Head>过期时间</Table.Head>
+                                    </Table.Row>
+                                </Table.Header>
+                                <Table.Body>
+                                    {#each redemptionHistory as history}
+                                        <Table.Row>
+                                            <Table.Cell class="font-mono text-xs">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="truncate max-w-[150px]">{history.codeId}</span>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onclick={() => copySingleCode(history.codeId)}
+                                                    >
+                                                        <Copy class="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            </Table.Cell>
+                                            <Table.Cell>
+                                                <div class="text-sm">
+                                                    <div class="font-medium">{history.user?.name || '未知用户'}</div>
+                                                    <div class="text-muted-foreground text-xs">
+                                                        {history.user?.email || '-'}
+                                                    </div>
+                                                </div>
+                                            </Table.Cell>
+                                            <Table.Cell>
+                                                <div class="text-sm">
+                                                    <div class="font-medium">{history.package?.name || '未知套餐'}</div>
+                                                    <div class="text-muted-foreground text-xs">
+                                                        {history.package?.validityDays || 0} 天有效期
+                                                    </div>
+                                                </div>
+                                            </Table.Cell>
+                                            <Table.Cell>
+                                                <Badge variant="secondary">
+                                                    {history.creditsGranted} 积分
+                                                </Badge>
+                                            </Table.Cell>
+                                            <Table.Cell>
+                                                <div class="text-sm">
+                                                    {new Date(history.redeemedAt).toLocaleString('zh-CN')}
+                                                </div>
+                                            </Table.Cell>
+                                            <Table.Cell>
+                                                <div class="text-sm">
+                                                    {new Date(history.expiresAt).toLocaleDateString('zh-CN')}
+                                                </div>
+                                            </Table.Cell>
+                                        </Table.Row>
+                                    {/each}
+                                </Table.Body>
+                            </Table.Root>
+
+                            <!-- 兑换历史分页控件 -->
+                            {#if historyTotal > historyLimit}
+                                <div class="flex items-center justify-between">
+                                    <div class="text-sm text-muted-foreground">
+                                        显示 {(historyPage - 1) * historyLimit + 1} - {Math.min(historyPage * historyLimit, historyTotal)} 条，共 {historyTotal} 条
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={historyPage === 1}
+                                            onclick={() => historyPage--}
+                                        >
+                                            <ChevronLeft class="h-4 w-4" />
+                                            上一页
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={historyPage * historyLimit >= historyTotal}
+                                            onclick={() => historyPage++}
+                                        >
+                                            下一页
+                                            <ChevronRight class="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            {/if}
+                        </div>
+                    {/if}
+                </Tabs.Content>
+            </Tabs.Root>
         </Card.Content>
     </Card.Root>
 
