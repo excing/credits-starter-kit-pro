@@ -1,5 +1,193 @@
 # 变更日志 (CHANGELOG)
 
+## [2026-02-07] - 积分系统 Bug 修复 & 聊天界面全面优化
+
+### 🐛 积分系统关键 Bug 修复
+
+#### Bug 1: 充值后未清理欠费
+
+**问题**: 用户存在欠费时，兑换积分码充值后积分全额到账，欠费未被结算，导致欠费持续累积。
+
+**根因**: `redeemCode()` 函数在授予积分后没有调用 `settleDebts()`。
+
+**修复**: 在 `redeemCode()` 事务内，授予积分后立即调用 `settleDebts(userId, tx)` 清理欠费。
+
+**影响文件**: `src/lib/server/credits.ts:603`
+
+#### Bug 2: 积分不足时扣款逻辑错误
+
+**问题**: 用户积分不足时，`deductCredits()` 函数调用 `recordDebt()` 记录欠费后立即 `throw InsufficientCreditsError`，导致事务回滚 — 已扣除的积分被恢复，但外层的 `recordDebt()` 不在事务内，欠费却被记录。最终结果：积分未扣，只记了欠费，用户可无限免费使用。
+
+**根因**:
+1. `recordDebt()` 在事务外执行，不受回滚影响
+2. `throw` 导致事务内的积分扣除全部回滚
+3. 积分查询 (`getUserActivePackages`) 在事务外执行，存在竞态条件
+
+**修复**:
+1. 新增 `recordDebtInTransaction()` 在事务内记录欠费
+2. 将积分查询移入事务内（使用 `tx.select()`），消除竞态条件
+3. 扣除所有可用积分 + 差额记为欠费，全部在同一事务内完成
+4. 不再抛出 `InsufficientCreditsError`，允许用户继续使用（产生欠费）
+
+**影响文件**: `src/lib/server/credits.ts:357-453`
+
+---
+
+### 🎨 聊天界面全面重构
+
+对 `/dashboard/chat` 进行了完整的用户体验优化，参考 ChatGPT / Claude / Gemini 等主流产品的最佳实践。
+
+#### 1. 欢迎界面
+
+- 空状态显示欢迎页面，带图标和提示文字
+- 3 个快捷提示按钮（创意灵感 / 写代码 / 解释概念），点击直接填入输入框
+
+#### 2. 消息气泡
+
+- 用户消息：蓝色背景，右对齐，带用户头像
+- AI 消息：灰色背景，左对齐，带渐变紫色 Bot 图标
+- 支持 prose 排版样式（代码块、列表等）
+
+#### 3. 状态管理
+
+**提交中 (Submitting)**: AI Bot 图标显示旋转动画 + 三点跳动加载指示器
+
+**流式输出 (Streaming)**: 消息气泡内文字末尾显示闪烁光标 `▌`，气泡下方显示「停止生成」按钮
+
+**错误状态 (Error)**: 按类型分类处理，共 6 种错误类型：
+
+| 错误类型 | 图标 | 消息 | 可重试 | 动作 |
+|---------|------|------|--------|------|
+| `insufficient_credits` | CreditCard | 积分不足，请先充值 | 否 | 跳转充值页 |
+| `unauthorized` | LogIn | 请先登录 | 否 | 跳转登录页 |
+| `rate_limit` | Clock | 请求过于频繁 | 是 | 重试按钮 |
+| `network` | WifiOff | 网络连接失败 | 是 | 重试按钮 |
+| `server` | ServerCrash | 服务器繁忙 | 是 | 重试按钮 |
+| `unknown` | AlertCircle | 发送失败 | 是 | 重试按钮 |
+
+**离线状态 (Offline)**: 顶部红色横幅提示网络断开，禁用输入框和发送按钮，网络恢复时自动提示
+
+#### 4. 自动滚动
+
+- 新消息 / 流式输出时自动滚动到底部
+- 用户手动上滚时停止自动滚动
+- 显示「滚动到底部」悬浮按钮
+- 用户发送新消息时恢复自动滚动
+
+#### 5. 输入区域
+
+- 自适应高度（最大 200px）
+- Enter 发送 / Shift+Enter 换行
+- 离线 / 提交中 / 流式输出时禁用
+- 底部免责声明文字
+
+#### 6. 积分余额提醒
+
+- 积分低于 10 时显示黄色警告横幅，带充值链接
+
+#### 7. 思考/推理内容展示
+
+- AI 的推理过程（reasoning parts）以可折叠 `<details>` 区块显示
+- 思考中：展开状态，Brain 图标 + 「思考中...」动画
+- 思考完成：折叠状态，显示「已深度思考」
+- 点击可展开/折叠查看完整推理内容
+
+**影响文件**: `src/routes/dashboard/chat/+page.svelte`（+580 行 / -94 行）
+
+---
+
+### 🔧 服务端变更
+
+#### `<think>` 标签中间件
+
+为支持使用 `<think></think>` 标签输出推理内容的模型（如 DeepSeek、Kimi 等），在服务端添加了 AI SDK 的 `extractReasoningMiddleware`：
+
+```typescript
+const model = wrapLanguageModel({
+    model: openai.chat(modelName),
+    middleware: extractReasoningMiddleware({ tagName: 'think' }),
+});
+```
+
+中间件自动将流中的 `<think>...</think>` 内容提取为 `reasoning` 类型的消息 part，前端统一以折叠区块渲染。
+
+对于原生支持 reasoning 的模型（如 Claude），AI SDK 直接返回 reasoning parts，无需中间件处理。两种场景互斥，前端渲染逻辑统一。
+
+**影响文件**: `src/routes/api/chat/+server.ts`
+
+#### 操作计费调整
+
+`default_usage` 计费从 1 积分调整为 2 积分。
+
+**影响文件**: `src/lib/server/operation-costs.config.ts`
+
+---
+
+### 🏗 架构与代码质量改进
+
+#### 统一消息发送逻辑
+
+提取 `sendMessage()` 统一函数，消除 `handleSubmit()` 与 `retryLastMessage()` 之间的代码重复。
+
+#### 基于回调的错误处理
+
+AI SDK 的 `Chat.sendMessage()` 不会抛出异常。错误通过回调机制处理：
+
+- `onError`: 捕获错误，调用 `parseError()` 分类，显示 toast 通知
+- `onFinish({ isError, isAbort, isDisconnect })`: 重置提交状态，处理断连/异常完成，成功时刷新积分
+
+```typescript
+const chat = new Chat({
+    onError: (error) => handleError(error),
+    onFinish: (options) => handleFinish(options),
+});
+```
+
+#### 错误 UI 去重
+
+修复了错误发生时用户消息出现两次的问题 — `chat.sendMessage()` 会自动将用户消息加入 `chat.messages`，无需在错误区域重复渲染。改为仅在消息列表下方显示居中错误横幅。
+
+---
+
+### 📊 影响范围
+
+#### 修改的文件（4 个）
+
+| 文件 | 变更 | 说明 |
+|------|------|------|
+| `src/lib/server/credits.ts` | +69 -11 | 修复积分扣款和充值结清欠费 |
+| `src/routes/dashboard/chat/+page.svelte` | +580 -94 | 聊天界面全面重构 |
+| `src/routes/api/chat/+server.ts` | +8 -4 | 添加 reasoning 中间件 |
+| `src/lib/server/operation-costs.config.ts` | +1 -1 | 计费调整 |
+
+#### 关联提交
+
+| 提交 | 说明 |
+|------|------|
+| `da3cde9` | 积分系统 Bug 修复（事务内欠费记录） |
+| `fb0e9db` | 聊天界面增强（错误处理、网络状态、UI 组件） |
+| `b0c2067` | 计费调整 + 思考/推理内容展示 |
+
+---
+
+### ✅ 验证
+
+```bash
+npm run check
+# svelte-check found 0 errors and 3 warnings
+# 3 个警告为 shadcn-svelte toggle-group 组件已有问题，与本次变更无关
+```
+
+---
+
+**变更时间**: 2026-02-07
+**变更作者**: Claude Code
+**变更状态**: 已完成
+**影响范围**: 积分系统核心逻辑、聊天界面、聊天 API
+**向后兼容**: 是
+
+---
+
 ## [2026-02-06] - 状态管理架构重构
 
 ### 🚀 重大变更
