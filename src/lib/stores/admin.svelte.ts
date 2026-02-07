@@ -54,6 +54,12 @@ export interface CreditDebt {
 	createdAt: string;
 }
 
+export interface OverviewStats {
+	revenue: { total: number; week: number };
+	users: { total: number; week: number };
+	credits: { totalGranted: number; totalConsumed: number; totalRemaining: number; weekGranted: number };
+}
+
 export interface PackageFormData {
 	id: string;
 	name: string;
@@ -109,6 +115,14 @@ class PaginatedState<T> {
 // ============ Admin Store 类 ============
 
 class AdminStore {
+	// 概览统计
+	overviewStats = $state<OverviewStats>({
+		revenue: { total: 0, week: 0 },
+		users: { total: 0, week: 0 },
+		credits: { totalGranted: 0, totalConsumed: 0, totalRemaining: 0, weekGranted: 0 }
+	});
+	overviewLoading = $state(true);
+
 	// 套餐状态
 	packages = $state<CreditPackage[]>([]);
 	packagesLoading = $state(true);
@@ -705,13 +719,33 @@ class AdminStore {
 		}
 	}
 
+	// ============ 概览统计 API ============
+
+	async loadOverviewStats() {
+		this.overviewLoading = true;
+		try {
+			const res = await fetch('/api/admin/credits/stats');
+			if (res.ok) {
+				const data = await res.json();
+				this.overviewStats = data;
+			} else {
+				toast.error('加载概览统计失败');
+			}
+		} catch (error) {
+			console.error('加载概览统计失败:', error);
+			toast.error('加载统计失败');
+		} finally {
+			this.overviewLoading = false;
+		}
+	}
+
 	// ============ 初始化 ============
 
 	async init() {
 		await this.loadPackages();
 		this.codes.initialized = true;
 		this.debts.initialized = true;
-		await Promise.all([this.loadCodes(), this.loadDebts()]);
+		await Promise.all([this.loadCodes(), this.loadDebts(), this.loadOverviewStats()]);
 	}
 }
 
