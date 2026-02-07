@@ -325,7 +325,39 @@ async function recordDebt(
 }
 
 /**
+ * 在事务内记录欠费
+ */
+async function recordDebtInTransaction(
+    tx: any,
+    userId: string,
+    amount: number,
+    operationType: string,
+    metadata?: Record<string, any>
+): Promise<void> {
+    await tx.insert(creditDebt).values({
+        id: randomUUID(),
+        userId,
+        amount,
+        operationType,
+        metadata: metadata ? JSON.stringify(metadata) : null,
+        relatedId: metadata?.relatedId || null,
+        isSettled: false
+    });
+
+    console.log('欠费记录已创建:', {
+        userId,
+        amount,
+        operationType
+    });
+}
+
+/**
  * 扣除积分（优先从即将过期的套餐扣除）- 带重试机制
+ *
+ * Bug修复说明：
+ * - 当积分不足时，先扣除所有可用积分，再将差额记录为欠费
+ * - 扣除积分和记录欠费在同一事务内完成，保证数据一致性
+ * - 不再抛出 InsufficientCreditsError，允许用户继续使用（但会产生欠费）
  */
 export async function deductCredits(
     userId: string,
@@ -345,12 +377,25 @@ export async function deductCredits(
         try {
             await db.transaction(async (tx) => {
                 // 获取所有有效套餐，按过期时间排序
-                const packages = await getUserActivePackages(userId);
+                const now = new Date();
+                const packages = await tx
+                    .select()
+                    .from(userCreditPackage)
+                    .where(
+                        and(
+                            eq(userCreditPackage.userId, userId),
+                            eq(userCreditPackage.isActive, true),
+                            gt(userCreditPackage.expiresAt, now),
+                            gt(userCreditPackage.creditsRemaining, 0)
+                        )
+                    )
+                    .orderBy(userCreditPackage.expiresAt);
 
-                // 检查总余额
-                const totalBalance = packages.reduce((sum, pkg) => sum + pkg.creditsRemaining, 0);
+                // 计算总余额
+                const totalBalance = packages.reduce((sum: number, pkg: any) => sum + pkg.creditsRemaining, 0);
 
                 let remainingAmount = amount;
+                let totalDeducted = 0;
 
                 // 从最早过期的套餐开始扣除
                 for (const pkg of packages) {
@@ -379,12 +424,27 @@ export async function deductCredits(
                     });
 
                     remainingAmount -= deductFromThis;
+                    totalDeducted += deductFromThis;
                 }
 
-                // 如果还有剩余未扣除的金额，记录欠费
+                // 如果还有剩余未扣除的金额，在事务内记录欠费
+                // Bug修复：确保扣除积分和记录欠费在同一事务内完成
                 if (remainingAmount > 0) {
-                    await recordDebt(userId, remainingAmount, operationType, metadata);
-                    throw new InsufficientCreditsError(amount, totalBalance);
+                    await recordDebtInTransaction(tx, userId, remainingAmount, operationType, {
+                        ...metadata,
+                        totalRequired: amount,
+                        deductedFromBalance: totalDeducted,
+                        debtAmount: remainingAmount
+                    });
+
+                    console.log('积分不足，已扣除可用积分并记录欠费:', {
+                        userId,
+                        operationType,
+                        totalRequired: amount,
+                        availableBalance: totalBalance,
+                        deductedFromBalance: totalDeducted,
+                        debtRecorded: remainingAmount
+                    });
                 }
             });
 
@@ -392,11 +452,6 @@ export async function deductCredits(
             return;
         } catch (error) {
             lastError = error as Error;
-
-            // 如果是余额不足错误，不重试（已经扣除了现有余额并记录了欠费）
-            if (error instanceof InsufficientCreditsError) {
-                throw error;
-            }
 
             // 记录重试日志
             console.error(`扣费失败 (尝试 ${attempt + 1}/${retryDelays.length + 1}):`, {
@@ -545,6 +600,9 @@ export async function redeemCode(
                 creditsGranted: pkg.credits,
                 expiresAt
             });
+
+            // 结算欠费（Bug修复：充值后应自动清理欠费）
+            await settleDebts(userId, tx);
 
             result = {
                 credits: pkg.credits,
