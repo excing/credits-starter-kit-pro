@@ -40,7 +40,7 @@ export const OPERATION_COSTS = {
      * 固定 1 积分/次
      */
     default_usage: {
-        costAmount: 1,
+        costAmount: 2,
         costPer: 1,
         isActive: true,
         metadata: {

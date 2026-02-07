@@ -22,6 +22,8 @@
         LogIn,
         Clock,
         ServerCrash,
+        Brain,
+        ChevronDown,
     } from "lucide-svelte";
     import { toast } from "svelte-sonner";
     import { goto } from "$app/navigation";
@@ -423,36 +425,65 @@
 
                         <!-- 消息内容 -->
                         <div class="flex max-w-[80%] flex-col gap-2">
-                            <div
-                                class={cn(
-                                    "rounded-2xl px-4 py-3",
-                                    message.role === "user"
-                                        ? "bg-primary text-primary-foreground"
-                                        : "bg-muted"
-                                )}
-                            >
-                                {#each message.parts as part}
-                                    {#if part.type === "text"}
-                                        <div
-                                            class={cn(
-                                                "prose prose-sm max-w-none dark:prose-invert",
-                                                "prose-p:my-1 prose-p:leading-relaxed",
-                                                "prose-pre:my-2 prose-pre:rounded-lg prose-pre:bg-black/10 dark:prose-pre:bg-white/10",
-                                                "prose-code:rounded prose-code:bg-black/10 prose-code:px-1 prose-code:py-0.5 prose-code:before:content-none prose-code:after:content-none dark:prose-code:bg-white/10",
-                                                "prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5",
-                                                message.role === "user" && "prose-invert"
-                                            )}
-                                        >
+                            <!-- 思考过程（reasoning parts）-->
+                            {#each message.parts as part}
+                                {#if part.type === "reasoning" && part.text}
+                                    {@const isThinking = part.state === "streaming"}
+                                    <details class="group rounded-xl border border-border/60 bg-muted/40" open={isThinking}>
+                                        <summary class="flex cursor-pointer select-none list-none items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+                                            <Brain class="h-3.5 w-3.5 flex-shrink-0" />
+                                            {#if isThinking}
+                                                <span class="animate-pulse">思考中...</span>
+                                            {:else}
+                                                <span>已深度思考</span>
+                                            {/if}
+                                            <ChevronDown class="ml-auto h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+                                        </summary>
+                                        <div class="border-t border-border/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground/80">
                                             {#each part.text.split('\n') as line, lineIndex}
                                                 {#if lineIndex > 0}<br />{/if}{line}
                                             {/each}
-                                            {#if showCursor}
-                                                <span class="ml-0.5 inline-block h-5 w-0.5 animate-pulse bg-current align-middle"></span>
+                                            {#if isThinking}
+                                                <span class="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse bg-current align-middle"></span>
                                             {/if}
                                         </div>
-                                    {/if}
-                                {/each}
-                            </div>
+                                    </details>
+                                {/if}
+                            {/each}
+
+                            <!-- 正文内容（text parts）-->
+                            {#if message.parts.some(p => p.type === "text") || message.role === "user"}
+                                <div
+                                    class={cn(
+                                        "rounded-2xl px-4 py-3",
+                                        message.role === "user"
+                                            ? "bg-primary text-primary-foreground"
+                                            : "bg-muted"
+                                    )}
+                                >
+                                    {#each message.parts as part}
+                                        {#if part.type === "text"}
+                                            <div
+                                                class={cn(
+                                                    "prose prose-sm max-w-none dark:prose-invert",
+                                                    "prose-p:my-1 prose-p:leading-relaxed",
+                                                    "prose-pre:my-2 prose-pre:rounded-lg prose-pre:bg-black/10 dark:prose-pre:bg-white/10",
+                                                    "prose-code:rounded prose-code:bg-black/10 prose-code:px-1 prose-code:py-0.5 prose-code:before:content-none prose-code:after:content-none dark:prose-code:bg-white/10",
+                                                    "prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5",
+                                                    message.role === "user" && "prose-invert"
+                                                )}
+                                            >
+                                                {#each part.text.split('\n') as line, lineIndex}
+                                                    {#if lineIndex > 0}<br />{/if}{line}
+                                                {/each}
+                                                {#if showCursor}
+                                                    <span class="ml-0.5 inline-block h-5 w-0.5 animate-pulse bg-current align-middle"></span>
+                                                {/if}
+                                            </div>
+                                        {/if}
+                                    {/each}
+                                </div>
+                            {/if}
 
                             <!-- 流式输出时显示停止按钮 -->
                             {#if showCursor}

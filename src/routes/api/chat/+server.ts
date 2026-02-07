@@ -1,5 +1,5 @@
 import { createOpenAI } from '@ai-sdk/openai';
-import { streamText, convertToModelMessages } from 'ai';
+import { streamText, convertToModelMessages, wrapLanguageModel, extractReasoningMiddleware } from 'ai';
 import { env } from '$env/dynamic/private';
 import { withCreditsStreaming } from '$lib/server/credits-middleware';
 import { calculateCost } from '$lib/server/operation-costs.config';
@@ -17,9 +17,15 @@ export const POST = withCreditsStreaming(
         const modelMessages = await convertToModelMessages(messages);
         const modelName = env.OPENAI_MODEL || 'gemini-3-flash-preview';
 
-        // 2. 执行 AI 流式响应
-        const result = streamText({
+        // 2. 包装模型，提取 <think> 标签中的推理内容
+        const model = wrapLanguageModel({
             model: openai.chat(modelName),
+            middleware: extractReasoningMiddleware({ tagName: 'think' }),
+        });
+
+        // 3. 执行 AI 流式响应
+        const result = streamText({
+            model,
             messages: modelMessages,
             onFinish: async ({ usage }) => {
                 try {
