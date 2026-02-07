@@ -16,22 +16,23 @@
 	});
 </script>
 
-<div class="flex flex-col gap-6 p-6">
+<div class="flex flex-col gap-6 p-4 sm:p-6">
 	<!-- 页面标题 -->
-	<div class="flex items-center justify-between">
-		<div class="flex items-center gap-4">
-			<Button variant="ghost" size="icon" onclick={() => goto('/dashboard/admin')}>
+	<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+		<div class="flex items-center gap-3 sm:gap-4">
+			<Button variant="ghost" size="icon" class="shrink-0" onclick={() => goto('/dashboard/admin')}>
 				<ArrowLeft class="h-5 w-5" />
 			</Button>
-			<div>
-				<h1 class="text-3xl font-bold flex items-center gap-3">
-					<Package class="h-8 w-8" />
-					积分套餐管理
+			<div class="min-w-0">
+				<h1 class="text-2xl font-bold flex items-center gap-2 sm:text-3xl sm:gap-3">
+					<Package class="h-6 w-6 shrink-0 sm:h-8 sm:w-8" />
+					<span class="truncate">积分套餐管理</span>
 				</h1>
-				<p class="text-muted-foreground mt-1">创建和管理积分套餐，设置价格、有效期等</p>
+				<p class="text-muted-foreground mt-1 text-sm sm:text-base truncate">创建和管理积分套餐，设置价格、有效期等</p>
 			</div>
 		</div>
 		<Button
+			class="self-start sm:self-auto shrink-0"
 			onclick={() => {
 				adminStore.resetPackageForm();
 				adminStore.createPackageDialogOpen = true;

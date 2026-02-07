@@ -17,19 +17,19 @@
 	});
 </script>
 
-<div class="flex flex-col gap-6 p-6">
+<div class="flex flex-col gap-6 p-4 sm:p-6">
 	<!-- 页面标题 -->
-	<div class="flex items-center justify-between">
-		<div class="flex items-center gap-4">
-			<Button variant="ghost" size="icon" onclick={() => goto('/dashboard/admin')}>
+	<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+		<div class="flex items-center gap-3 sm:gap-4">
+			<Button variant="ghost" size="icon" class="shrink-0" onclick={() => goto('/dashboard/admin')}>
 				<ArrowLeft class="h-5 w-5" />
 			</Button>
-			<div>
-				<h1 class="text-3xl font-bold flex items-center gap-3">
-					<ShieldCheck class="h-8 w-8" />
-					欠费管理
+			<div class="min-w-0">
+				<h1 class="text-2xl font-bold flex items-center gap-2 sm:text-3xl sm:gap-3">
+					<ShieldCheck class="h-6 w-6 shrink-0 sm:h-8 sm:w-8" />
+					<span class="truncate">欠费管理</span>
 				</h1>
-				<p class="text-muted-foreground mt-1">查看和处理用户欠费记录</p>
+				<p class="text-muted-foreground mt-1 text-sm sm:text-base truncate">查看和处理用户欠费记录</p>
 			</div>
 		</div>
 	</div>
@@ -62,7 +62,7 @@
 	<!-- 欠费列表 -->
 	<Card.Root>
 		<Card.Header>
-			<div class="flex items-center justify-between">
+			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<div>
 					<Card.Title>欠费记录</Card.Title>
 					<Card.Description>查看和管理用户欠费记录</Card.Description>

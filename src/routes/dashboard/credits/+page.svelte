@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { authState, statsState, afterCreditsEarned } from "$lib/stores/auth";
+    import { authState, statsState, afterCreditsEarned, refreshUserCredits, refreshUserStats } from "$lib/stores/auth";
     import * as Card from "$lib/components/ui/card";
     import * as Dialog from "$lib/components/ui/dialog";
     import * as Table from "$lib/components/ui/table";
@@ -112,20 +112,23 @@
 
     onMount(() => {
         loadPageData();
+        // 每次进入页面都刷新积分余额和统计数据
+        refreshUserCredits();
+        refreshUserStats();
     });
 </script>
 
-<div class="flex flex-col gap-6 p-6">
-    <div class="flex items-center justify-between">
+<div class="flex flex-col gap-6 p-4 sm:p-6">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-            <h1 class="text-3xl font-bold">积分管理</h1>
-            <p class="text-muted-foreground mt-1">查看余额、兑换积分和交易历史</p>
+            <h1 class="text-2xl font-bold sm:text-3xl">积分管理</h1>
+            <p class="text-muted-foreground mt-1 text-sm sm:text-base">查看余额、兑换积分和交易历史</p>
         </div>
     </div>
 
     <!-- 积分统计卡片 -->
     {#if $statsState.data}
-        <div class="grid gap-4 grid-cols-2 md:grid-cols-3">
+        <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
             <Card.Root>
                 <Card.Header>
                     <Card.Title class="text-sm font-medium">总获得</Card.Title>
@@ -358,7 +361,9 @@
                     暂无交易记录
                 </p>
             {:else}
-                <Table.Root>
+                <div class="overflow-x-auto -mx-6">
+                    <div class="min-w-[500px] px-6">
+                        <Table.Root>
                     <Table.Header>
                         <Table.Row>
                             <Table.Head>类型</Table.Head>
@@ -396,7 +401,9 @@
                             </Table.Row>
                         {/each}
                     </Table.Body>
-                </Table.Root>
+                        </Table.Root>
+                    </div>
+                </div>
             {/if}
         </Card.Content>
     </Card.Root>

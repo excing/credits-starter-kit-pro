@@ -32,22 +32,22 @@
 	}
 </script>
 
-<div class="flex flex-col gap-6 p-6">
+<div class="flex flex-col gap-6 p-4 sm:p-6">
 	<!-- 页面标题 -->
-	<div class="flex items-center justify-between">
-		<div class="flex items-center gap-4">
-			<Button variant="ghost" size="icon" onclick={() => goto('/dashboard/admin')}>
+	<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+		<div class="flex items-center gap-3 sm:gap-4">
+			<Button variant="ghost" size="icon" class="shrink-0" onclick={() => goto('/dashboard/admin')}>
 				<ArrowLeft class="h-5 w-5" />
 			</Button>
-			<div>
-				<h1 class="text-3xl font-bold flex items-center gap-3">
-					<Gift class="h-8 w-8" />
-					兑换码管理
+			<div class="min-w-0">
+				<h1 class="text-2xl font-bold flex items-center gap-2 sm:text-3xl sm:gap-3">
+					<Gift class="h-6 w-6 shrink-0 sm:h-8 sm:w-8" />
+					<span class="truncate">兑换码管理</span>
 				</h1>
-				<p class="text-muted-foreground mt-1">生成、分发和管理兑换码，查看兑换历史</p>
+				<p class="text-muted-foreground mt-1 text-sm sm:text-base truncate">生成、分发和管理兑换码，查看兑换历史</p>
 			</div>
 		</div>
-		<Button onclick={() => (adminStore.generateDialogOpen = true)}>
+		<Button class="self-start sm:self-auto shrink-0" onclick={() => (adminStore.generateDialogOpen = true)}>
 			<Plus class="mr-2 h-4 w-4" />
 			生成兑换码
 		</Button>
