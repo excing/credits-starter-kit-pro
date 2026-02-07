@@ -125,7 +125,7 @@
 
     <!-- 积分统计卡片 -->
     {#if $statsState.data}
-        <div class="grid gap-4 md:grid-cols-3">
+        <div class="grid gap-4 grid-cols-2 md:grid-cols-3">
             <Card.Root>
                 <Card.Header>
                     <Card.Title class="text-sm font-medium">总获得</Card.Title>
