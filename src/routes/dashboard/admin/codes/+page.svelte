@@ -7,7 +7,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Gift, History, Copy, ChevronLeft, ChevronRight, ArrowLeft, Plus } from 'lucide-svelte';
+	import { Gift, History, Copy, ChevronLeft, ChevronRight, ArrowLeft, Plus, Filter } from 'lucide-svelte';
 	import { adminStore } from '$lib/stores/admin.svelte';
 	import { AdminDialogs, CodeRow } from '$lib/components/admin';
 
@@ -97,6 +97,82 @@
 
 				<!-- 兑换码列表 Tab -->
 				<Tabs.Content value="codes" class="mt-4">
+					<!-- 筛选栏 -->
+					<div class="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
+						<div class="flex flex-wrap gap-2">
+							<Button
+								size="sm"
+								variant={adminStore.codeStatusFilter === 'all' ? 'default' : 'outline'}
+								onclick={() => {
+									adminStore.setCodeStatusFilter('all');
+									adminStore.loadCodes();
+								}}
+							>
+								全部
+							</Button>
+							<Button
+								size="sm"
+								variant={adminStore.codeStatusFilter === 'active' ? 'default' : 'outline'}
+								onclick={() => {
+									adminStore.setCodeStatusFilter('active');
+									adminStore.loadCodes();
+								}}
+							>
+								有效
+							</Button>
+							<Button
+								size="sm"
+								variant={adminStore.codeStatusFilter === 'used' ? 'default' : 'outline'}
+								onclick={() => {
+									adminStore.setCodeStatusFilter('used');
+									adminStore.loadCodes();
+								}}
+							>
+								已使用
+							</Button>
+							<Button
+								size="sm"
+								variant={adminStore.codeStatusFilter === 'expired' ? 'default' : 'outline'}
+								onclick={() => {
+									adminStore.setCodeStatusFilter('expired');
+									adminStore.loadCodes();
+								}}
+							>
+								已过期
+							</Button>
+							<Button
+								size="sm"
+								variant={adminStore.codeStatusFilter === 'disabled' ? 'default' : 'outline'}
+								onclick={() => {
+									adminStore.setCodeStatusFilter('disabled');
+									adminStore.loadCodes();
+								}}
+							>
+								已禁用
+							</Button>
+						</div>
+						{#if adminStore.packages.length > 0}
+							<div class="flex items-center gap-2">
+								<Filter class="h-4 w-4 text-muted-foreground shrink-0" />
+								<select
+									value={adminStore.codePackageFilter}
+									onchange={(e) => {
+										adminStore.setCodePackageFilter(e.currentTarget.value);
+										adminStore.loadCodes();
+									}}
+									class="flex h-8 w-full sm:w-auto items-center rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+								>
+									<option value="">全部套餐</option>
+									{#each adminStore.packages as pkg}
+										<option value={pkg.id}>
+											{pkg.name} ({pkg.credits}积分)
+										</option>
+									{/each}
+								</select>
+							</div>
+						{/if}
+					</div>
+
 					{#if adminStore.codes.loading}
 						<div class="space-y-2">
 							<Skeleton class="h-16 w-full" />
@@ -106,12 +182,26 @@
 					{:else if adminStore.codes.items.length === 0}
 						<div class="text-center py-12">
 							<Gift class="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-							<h3 class="text-lg font-medium mb-2">暂无兑换码</h3>
-							<p class="text-muted-foreground mb-4">点击上方按钮生成兑换码</p>
-							<Button onclick={() => (adminStore.generateDialogOpen = true)}>
-								<Plus class="mr-2 h-4 w-4" />
-								生成兑换码
-							</Button>
+							<h3 class="text-lg font-medium mb-2">
+								{#if adminStore.codeStatusFilter !== 'all' || adminStore.codePackageFilter}
+									无匹配的兑换码
+								{:else}
+									暂无兑换码
+								{/if}
+							</h3>
+							<p class="text-muted-foreground mb-4">
+								{#if adminStore.codeStatusFilter !== 'all' || adminStore.codePackageFilter}
+									尝试调整筛选条件查看更多
+								{:else}
+									点击上方按钮生成兑换码
+								{/if}
+							</p>
+							{#if adminStore.codeStatusFilter === 'all' && !adminStore.codePackageFilter}
+								<Button onclick={() => (adminStore.generateDialogOpen = true)}>
+									<Plus class="mr-2 h-4 w-4" />
+									生成兑换码
+								</Button>
+							{/if}
 						</div>
 					{:else}
 						<div class="space-y-4">

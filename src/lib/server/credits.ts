@@ -868,37 +868,71 @@ export async function getAllPackages() {
 }
 
 /**
- * 获取兑换码列表（分页，带关联套餐信息）
+ * 获取兑换码列表（分页，带关联套餐信息，支持筛选）
  */
-export async function getRedemptionCodes(limit: number, offset: number) {
+export async function getRedemptionCodes(
+    limit: number,
+    offset: number,
+    filters?: { status?: 'active' | 'used' | 'expired' | 'disabled'; packageId?: string }
+) {
+    const now = new Date();
+    const conditions = [];
+
+    if (filters?.status === 'active') {
+        conditions.push(eq(redemptionCode.isActive, true));
+        conditions.push(gt(redemptionCode.codeExpiresAt, now));
+        conditions.push(sql`${redemptionCode.currentUses} < ${redemptionCode.maxUses}`);
+    } else if (filters?.status === 'used') {
+        conditions.push(eq(redemptionCode.isActive, true));
+        conditions.push(sql`${redemptionCode.currentUses} >= ${redemptionCode.maxUses}`);
+    } else if (filters?.status === 'expired') {
+        conditions.push(eq(redemptionCode.isActive, true));
+        conditions.push(sql`${redemptionCode.codeExpiresAt} <= ${now}`);
+    } else if (filters?.status === 'disabled') {
+        conditions.push(eq(redemptionCode.isActive, false));
+    }
+
+    if (filters?.packageId) {
+        conditions.push(eq(redemptionCode.packageId, filters.packageId));
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const selectFields = {
+        id: redemptionCode.id,
+        code: redemptionCode.id,
+        packageId: redemptionCode.packageId,
+        maxUses: redemptionCode.maxUses,
+        usedCount: redemptionCode.currentUses,
+        expiresAt: redemptionCode.codeExpiresAt,
+        isActive: redemptionCode.isActive,
+        createdAt: redemptionCode.createdAt,
+        package: {
+            id: creditPackage.id,
+            name: creditPackage.name,
+            credits: creditPackage.credits,
+            validityDays: creditPackage.validityDays
+        }
+    };
+
+    const baseQuery = db
+        .select(selectFields)
+        .from(redemptionCode)
+        .leftJoin(creditPackage, eq(creditPackage.id, redemptionCode.packageId));
+
+    const countQuery = db
+        .select({ count: count() })
+        .from(redemptionCode);
+
     const [codes, totalCount] = await Promise.all([
-        db
-            .select({
-                id: redemptionCode.id,
-                code: redemptionCode.id,
-                packageId: redemptionCode.packageId,
-                maxUses: redemptionCode.maxUses,
-                usedCount: redemptionCode.currentUses,
-                expiresAt: redemptionCode.codeExpiresAt,
-                isActive: redemptionCode.isActive,
-                createdAt: redemptionCode.createdAt,
-                package: {
-                    id: creditPackage.id,
-                    name: creditPackage.name,
-                    credits: creditPackage.credits,
-                    validityDays: creditPackage.validityDays
-                }
-            })
-            .from(redemptionCode)
-            .leftJoin(creditPackage, eq(creditPackage.id, redemptionCode.packageId))
-            .limit(limit)
-            .offset(offset)
-            .orderBy(desc(redemptionCode.createdAt)),
-        db
-            .select({ count: count() })
-            .from(redemptionCode)
-            .then((result) => result[0].count)
+        whereClause
+            ? baseQuery.where(whereClause).limit(limit).offset(offset).orderBy(desc(redemptionCode.createdAt))
+            : baseQuery.limit(limit).offset(offset).orderBy(desc(redemptionCode.createdAt)),
+        whereClause
+            ? countQuery.where(whereClause).then((r) => r[0].count)
+            : countQuery.then((r) => r[0].count)
     ]);
+
     return { codes, total: totalCount };
 }
 

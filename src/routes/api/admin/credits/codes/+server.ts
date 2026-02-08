@@ -13,8 +13,18 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	try {
 		const limit = parseInt(url.searchParams.get('limit') || '50');
 		const offset = parseInt(url.searchParams.get('offset') || '0');
+		const status = url.searchParams.get('status') as 'active' | 'used' | 'expired' | 'disabled' | null;
+		const packageId = url.searchParams.get('packageId');
 
-		const { codes, total } = await getRedemptionCodes(limit, offset);
+		const filters: { status?: 'active' | 'used' | 'expired' | 'disabled'; packageId?: string } = {};
+		if (status && ['active', 'used', 'expired', 'disabled'].includes(status)) {
+			filters.status = status;
+		}
+		if (packageId) {
+			filters.packageId = packageId;
+		}
+
+		const { codes, total } = await getRedemptionCodes(limit, offset, filters);
 
 		return json({ codes, total, limit, offset });
 	} catch (error) {

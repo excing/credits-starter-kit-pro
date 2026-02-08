@@ -133,6 +133,10 @@ class AdminStore {
 	// 兑换历史分页状态
 	history = new PaginatedState<RedemptionHistoryItem>(20);
 
+	// 兑换码筛选状态
+	codeStatusFilter = $state<'all' | 'active' | 'used' | 'expired' | 'disabled'>('all');
+	codePackageFilter = $state<string>('');
+
 	// 欠费分页状态
 	debts = new PaginatedState<CreditDebt>(20);
 	debtFilter = $state<'all' | 'unsettled' | 'settled'>('unsettled');
@@ -414,9 +418,17 @@ class AdminStore {
 	async loadCodes() {
 		this.codes.loading = true;
 		try {
-			const res = await fetch(
-				`/api/admin/credits/codes?limit=${this.codes.limit}&offset=${this.codes.offset}`
-			);
+			const params = new URLSearchParams({
+				limit: this.codes.limit.toString(),
+				offset: this.codes.offset.toString()
+			});
+			if (this.codeStatusFilter !== 'all') {
+				params.append('status', this.codeStatusFilter);
+			}
+			if (this.codePackageFilter) {
+				params.append('packageId', this.codePackageFilter);
+			}
+			const res = await fetch(`/api/admin/credits/codes?${params}`);
 			if (res.ok) {
 				const data = await res.json();
 				this.codes.items = data.codes;
@@ -429,6 +441,20 @@ class AdminStore {
 			toast.error('加载失败');
 		} finally {
 			this.codes.loading = false;
+		}
+	}
+
+	setCodeStatusFilter(filter: 'all' | 'active' | 'used' | 'expired' | 'disabled') {
+		if (filter !== this.codeStatusFilter) {
+			this.codeStatusFilter = filter;
+			this.codes.page = 1;
+		}
+	}
+
+	setCodePackageFilter(packageId: string) {
+		if (packageId !== this.codePackageFilter) {
+			this.codePackageFilter = packageId;
+			this.codes.page = 1;
 		}
 	}
 
