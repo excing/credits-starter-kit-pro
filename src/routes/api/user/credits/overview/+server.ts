@@ -3,7 +3,7 @@
  * GET /api/user/credits/overview
  *
  * 将以下 5 个请求合并为 1 个（仅用于页面初始加载）：
- * - /api/user/credits (余额)
+ * - /api/user/credits (余额 —— 由 activePackages 在应用层计算，无额外 DB 查询)
  * - /api/user/credits/stats (统计)
  * - /api/user/credits/history (交易历史，固定前20条)
  * - /api/user/credits/packages (套餐)
@@ -14,12 +14,12 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import {
-	getUserBalance,
 	getUserActivePackages,
 	getUserInactivePackages,
 	getUserTransactions,
 	getUserDebts,
-	getUserCreditStats
+	getUserCreditStats,
+	calcBalanceFromPackages
 } from '$lib/server/credits';
 
 const HISTORY_LIMIT = 20;
@@ -32,8 +32,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 	}
 
 	try {
-		const [balance, activePackages, inactivePackages, transactions, debts, stats] = await Promise.all([
-			getUserBalance(userId),
+		const [activePackages, inactivePackages, transactions, debts, stats] = await Promise.all([
 			getUserActivePackages(userId),
 			getUserInactivePackages(userId),
 			getUserTransactions(userId, HISTORY_LIMIT, 0),
@@ -42,7 +41,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		]);
 
 		return json({
-			balance,
+			balance: calcBalanceFromPackages(activePackages),
 			activePackages: activePackages.length,
 			stats,
 			transactions,

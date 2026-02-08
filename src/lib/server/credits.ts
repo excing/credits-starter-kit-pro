@@ -71,6 +71,16 @@ export async function getUserBalance(userId: string): Promise<number> {
 }
 
 /**
+ * 从已查询的有效套餐中计算余额，避免额外 DB 查询。
+ * 当已持有 activePackages 结果时，用此函数替代 getUserBalance()。
+ */
+export function calcBalanceFromPackages(
+    activePackages: { creditsRemaining: number }[]
+): number {
+    return activePackages.reduce((sum, pkg) => sum + pkg.creditsRemaining, 0);
+}
+
+/**
  * 获取用户所有有效套餐
  */
 export async function getUserActivePackages(userId: string) {

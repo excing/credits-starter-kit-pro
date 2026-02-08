@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getUserBalance, getUserActivePackages } from '$lib/server/credits';
+import { getUserActivePackages, calcBalanceFromPackages } from '$lib/server/credits';
 
 export const GET: RequestHandler = async ({ locals }) => {
     const userId = locals.session?.user?.id;
@@ -10,11 +10,10 @@ export const GET: RequestHandler = async ({ locals }) => {
     }
 
     try {
-        const balance = await getUserBalance(userId);
         const activePackages = await getUserActivePackages(userId);
 
         return json({
-            balance,
+            balance: calcBalanceFromPackages(activePackages),
             activePackages: activePackages.length
         });
     } catch (error) {

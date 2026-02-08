@@ -5,15 +5,15 @@
  * 仅返回 /dashboard 页面所需的轻量数据（余额 + 统计摘要），
  * 避免与 /api/user/credits/overview（credits 页面专用）重复请求。
  *
- * 查询：getUserBalance + getUserActivePackages + getUserCreditStats = 3 次 DB 查询
- * 对比 overview 的 6 次 DB 查询，减少了 transactions / inactivePackages / debts。
+ * 查询：getUserActivePackages + getUserCreditStats = 2 次 DB 查询
+ * 余额由 activePackages 在应用层计算，省去原先的 getUserBalance 查询。
  */
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import {
-	getUserBalance,
 	getUserActivePackages,
-	getUserCreditStats
+	getUserCreditStats,
+	calcBalanceFromPackages
 } from '$lib/server/credits';
 
 export const GET: RequestHandler = async ({ locals }) => {
@@ -24,14 +24,13 @@ export const GET: RequestHandler = async ({ locals }) => {
 	}
 
 	try {
-		const [balance, activePackages, stats] = await Promise.all([
-			getUserBalance(userId),
+		const [activePackages, stats] = await Promise.all([
 			getUserActivePackages(userId),
 			getUserCreditStats(userId)
 		]);
 
 		return json({
-			balance,
+			balance: calcBalanceFromPackages(activePackages),
 			activePackages: activePackages.length,
 			stats
 		});
