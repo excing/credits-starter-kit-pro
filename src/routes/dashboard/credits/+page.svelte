@@ -302,24 +302,34 @@
             <Card.Content>
                 <div class="space-y-3">
                     {#each packages as pkg}
-                        <div
-                            class="flex items-center justify-between p-3 border rounded-lg"
-                        >
-                            <div>
-                                <p class="font-medium">
-                                    剩余 {pkg.creditsRemaining} / {pkg.creditsTotal} 积分
-                                </p>
-                                <p class="text-sm text-muted-foreground">
-                                    过期时间: {formatDate(pkg.expiresAt)}
-                                </p>
+                        {@const percent = usagePercent(pkg.creditsRemaining, pkg.creditsTotal)}
+                        <div class="p-3 border rounded-lg space-y-2">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="font-medium">
+                                        剩余 {pkg.creditsRemaining} / {pkg.creditsTotal} 积分
+                                    </p>
+                                    <p class="text-sm text-muted-foreground">
+                                        过期时间: {formatDate(pkg.expiresAt)}
+                                    </p>
+                                </div>
+                                <Badge variant="outline">
+                                    {pkg.source === "redemption"
+                                        ? "兑换"
+                                        : pkg.source === "purchase"
+                                          ? "购买"
+                                          : "赠送"}
+                                </Badge>
                             </div>
-                            <Badge variant="outline">
-                                {pkg.source === "redemption"
-                                    ? "兑换"
-                                    : pkg.source === "purchase"
-                                      ? "购买"
-                                      : "赠送"}
-                            </Badge>
+                            <div class="flex items-center gap-2">
+                                <div class="h-2 flex-1 rounded-full bg-primary/15 overflow-hidden">
+                                    <div
+                                        class="h-full rounded-full transition-all {percent > 50 ? 'bg-primary' : percent > 20 ? 'bg-orange-500' : 'bg-red-500'}"
+                                        style="width: {percent}%"
+                                    ></div>
+                                </div>
+                                <span class="text-xs text-muted-foreground w-8 text-right">{percent}%</span>
+                            </div>
                         </div>
                     {/each}
                 </div>
