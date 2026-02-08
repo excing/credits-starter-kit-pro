@@ -54,8 +54,13 @@
 				<Gift class="h-4 w-4 text-muted-foreground" />
 			</Card.Header>
 			<Card.Content>
-				<div class="text-2xl font-bold">{adminStore.codePageSnapshotCounts.totalCodes}</div>
-				<p class="text-xs text-muted-foreground">已生成兑换码数量</p>
+				{#if adminStore.codes.loading}
+					<Skeleton class="h-8 w-16 mb-1" />
+					<Skeleton class="h-3 w-24" />
+				{:else}
+					<div class="text-2xl font-bold">{adminStore.codePageSnapshotCounts.totalCodes}</div>
+					<p class="text-xs text-muted-foreground">已生成兑换码数量</p>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 
@@ -65,8 +70,13 @@
 				<History class="h-4 w-4 text-muted-foreground" />
 			</Card.Header>
 			<Card.Content>
-				<div class="text-2xl font-bold">{adminStore.codePageSnapshotCounts.totalRedemptions}</div>
-				<p class="text-xs text-muted-foreground">总兑换次数</p>
+				{#if adminStore.codes.loading}
+					<Skeleton class="h-8 w-16 mb-1" />
+					<Skeleton class="h-3 w-20" />
+				{:else}
+					<div class="text-2xl font-bold">{adminStore.codePageSnapshotCounts.totalRedemptions}</div>
+					<p class="text-xs text-muted-foreground">总兑换次数</p>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 	</div>

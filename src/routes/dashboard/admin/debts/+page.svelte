@@ -43,8 +43,13 @@
 				<AlertCircle class="h-4 w-4 text-muted-foreground" />
 			</Card.Header>
 			<Card.Content>
-				<div class="text-2xl font-bold">{adminStore.debts.items.filter((d) => !d.isSettled).length}</div>
-				<p class="text-xs text-muted-foreground">待处理欠费记录</p>
+				{#if adminStore.debts.loading}
+					<Skeleton class="h-8 w-16 mb-1" />
+					<Skeleton class="h-3 w-24" />
+				{:else}
+					<div class="text-2xl font-bold">{adminStore.debts.items.filter((d) => !d.isSettled).length}</div>
+					<p class="text-xs text-muted-foreground">待处理欠费记录</p>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 
@@ -54,8 +59,13 @@
 				<DollarSign class="h-4 w-4 text-muted-foreground" />
 			</Card.Header>
 			<Card.Content>
-				<div class="text-2xl font-bold">{adminStore.debts.items.filter((d) => !d.isSettled).reduce((sum, d) => sum + d.amount, 0)}</div>
-				<p class="text-xs text-muted-foreground">未结清积分总额</p>
+				{#if adminStore.debts.loading}
+					<Skeleton class="h-8 w-20 mb-1" />
+					<Skeleton class="h-3 w-24" />
+				{:else}
+					<div class="text-2xl font-bold">{adminStore.debts.items.filter((d) => !d.isSettled).reduce((sum, d) => sum + d.amount, 0)}</div>
+					<p class="text-xs text-muted-foreground">未结清积分总额</p>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 	</div>

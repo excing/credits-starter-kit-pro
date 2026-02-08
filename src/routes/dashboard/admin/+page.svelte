@@ -3,9 +3,12 @@
 	import { goto } from '$app/navigation';
 	import * as Card from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Gift, Plus, Package, ShieldCheck, ArrowRight, History } from 'lucide-svelte';
 	import { adminStore } from '$lib/stores/admin.svelte';
 	import { AdminStats, AdminDialogs } from '$lib/components/admin';
+
+	let loading = $derived(adminStore.overviewLoading);
 
 	onMount(() => {
 		adminStore.init();
@@ -91,12 +94,19 @@
 				</Card.Header>
 				<Card.Content>
 					<p class="text-sm text-muted-foreground mb-3">{page.description}</p>
-					<div class="flex items-center gap-2">
-						<span class="text-2xl font-bold">{page.stat()}</span>
-						<span class="text-sm text-muted-foreground">{page.statLabel}</span>
-					</div>
-					{#if page.subStat}
-						<p class="text-xs text-muted-foreground mt-1">{page.subStat()}</p>
+					{#if loading}
+						<Skeleton class="h-8 w-24 mb-1" />
+						{#if page.subStat}
+							<Skeleton class="h-3 w-32 mt-1" />
+						{/if}
+					{:else}
+						<div class="flex items-center gap-2">
+							<span class="text-2xl font-bold">{page.stat()}</span>
+							<span class="text-sm text-muted-foreground">{page.statLabel}</span>
+						</div>
+						{#if page.subStat}
+							<p class="text-xs text-muted-foreground mt-1">{page.subStat()}</p>
+						{/if}
 					{/if}
 				</Card.Content>
 			</Card.Root>

@@ -2,6 +2,7 @@
     import { Button } from "$lib/components/ui/button";
     import * as Sheet from "$lib/components/ui/sheet";
     import { Separator } from "$lib/components/ui/separator";
+    import { Skeleton } from "$lib/components/ui/skeleton";
     import UserProfile from "$lib/components/UserProfile.svelte";
     import {
         Home,
@@ -107,7 +108,11 @@
                 class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
             >
                 <Coins class="h-4 w-4 text-primary" />
-                <span class="text-sm font-medium">{$authState.user?.credits ?? 0}</span>
+                {#if !$authState.loaded}
+                    <Skeleton class="h-4 w-8" />
+                {:else}
+                    <span class="text-sm font-medium">{$authState.user?.credits ?? 0}</span>
+                {/if}
             </a>
             <UserProfile mini={true} />
         </div>

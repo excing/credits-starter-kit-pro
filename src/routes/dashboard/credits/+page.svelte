@@ -222,7 +222,23 @@
     </div>
 
     <!-- 即将过期提醒 -->
-    {#if $statsState.data && $statsState.data.expiringPackages.length > 0}
+    {#if loading}
+        <Card.Root class="border-orange-200 bg-orange-50 dark:bg-orange-900/10">
+            <Card.Header>
+                <Card.Title class="flex items-center gap-2 text-orange-800 dark:text-orange-400">
+                    <AlertCircle class="h-5 w-5" />
+                    即将过期提醒
+                </Card.Title>
+                <Card.Description>检查即将过期的套餐...</Card.Description>
+            </Card.Header>
+            <Card.Content>
+                <div class="space-y-2">
+                    <Skeleton class="h-12 w-full" />
+                    <Skeleton class="h-12 w-full" />
+                </div>
+            </Card.Content>
+        </Card.Root>
+    {:else if $statsState.data && $statsState.data.expiringPackages.length > 0}
         <Card.Root class="border-orange-200 bg-orange-50 dark:bg-orange-900/10">
             <Card.Header>
                 <Card.Title class="flex items-center gap-2 text-orange-800 dark:text-orange-400">
@@ -254,7 +270,22 @@
     {/if}
 
     <!-- 欠费提醒 -->
-    {#if !debtsLoading && debts.length > 0}
+    {#if debtsLoading}
+        <Card.Root class="border-red-200 bg-red-50 dark:bg-red-900/10">
+            <Card.Header>
+                <Card.Title class="flex items-center gap-2 text-red-800 dark:text-red-400">
+                    <AlertTriangle class="h-5 w-5" />
+                    欠费提醒
+                </Card.Title>
+                <Card.Description>检查欠费记录...</Card.Description>
+            </Card.Header>
+            <Card.Content>
+                <div class="space-y-2">
+                    <Skeleton class="h-12 w-full" />
+                </div>
+            </Card.Content>
+        </Card.Root>
+    {:else if debts.length > 0}
         <Card.Root class="border-red-200 bg-red-50 dark:bg-red-900/10">
             <Card.Header>
                 <Card.Title class="flex items-center gap-2 text-red-800 dark:text-red-400">
@@ -294,7 +325,20 @@
     {/if}
 
     <!-- 我的套餐 -->
-    {#if !loading && packages.length > 0}
+    {#if loading}
+        <Card.Root>
+            <Card.Header>
+                <Card.Title>我的套餐</Card.Title>
+                <Card.Description>当前拥有的有效积分套餐</Card.Description>
+            </Card.Header>
+            <Card.Content>
+                <div class="space-y-3">
+                    <Skeleton class="h-20 w-full" />
+                    <Skeleton class="h-20 w-full" />
+                </div>
+            </Card.Content>
+        </Card.Root>
+    {:else if packages.length > 0}
         <Card.Root>
             <Card.Header>
                 <Card.Title>我的套餐</Card.Title>

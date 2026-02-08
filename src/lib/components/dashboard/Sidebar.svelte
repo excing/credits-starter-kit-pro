@@ -2,6 +2,7 @@
     import { page } from "$app/stores";
     import { goto } from "$app/navigation";
     import { cn } from "$lib/utils";
+    import { Skeleton } from "$lib/components/ui/skeleton";
     import UserProfile from "$lib/components/UserProfile.svelte";
     import {
         Home,
@@ -180,7 +181,13 @@
                             <Coins class="h-4 w-4 text-primary" />
                             <span class="text-sm font-medium">积分余额</span>
                         </div>
-                        <span class="text-sm font-bold text-primary">{$authState.user?.credits ?? 0}</span>
+                        <span class="text-sm font-bold text-primary">
+                            {#if !$authState.loaded}
+                                <Skeleton class="h-4 w-8 inline-block" />
+                            {:else}
+                                {$authState.user?.credits ?? 0}
+                            {/if}
+                        </span>
                     </a>
                 </div>
                 <div class="px-4">
