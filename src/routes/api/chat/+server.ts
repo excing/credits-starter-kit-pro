@@ -15,7 +15,7 @@ export const POST = withCreditsStreaming(
         // 1. 解析请求
         const { messages } = await request.json();
         const modelMessages = await convertToModelMessages(messages);
-        const modelName = env.OPENAI_MODEL || 'gemini-3-flash-preview';
+        const modelName = env.OPENAI_MODEL || '';
 
         // 2. 包装模型，提取 <think> 标签中的推理内容
         const model = wrapLanguageModel({
