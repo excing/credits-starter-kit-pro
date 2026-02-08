@@ -10,10 +10,11 @@
 	import { DebtRow } from '$lib/components/admin';
 
 	onMount(() => {
-		if (!adminStore.debts.initialized) {
-			adminStore.debts.initialized = true;
-			adminStore.loadDebts();
-		}
+		// 每次进入/返回页面都重新加载，确保数据最新
+		adminStore.debtFilter = 'unsettled';
+		adminStore.debts.page = 1;
+		adminStore.debts.initialized = true;
+		adminStore.loadDebts();
 	});
 </script>
 
