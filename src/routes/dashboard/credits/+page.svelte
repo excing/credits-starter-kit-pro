@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { authState, statsState, afterCreditsEarned, patchCurrentUser, setStatsData } from "$lib/stores/auth";
+    import { authState, statsState, patchCurrentUser, setStatsData } from "$lib/stores/auth";
     import * as Card from "$lib/components/ui/card";
     import * as Dialog from "$lib/components/ui/dialog";
     import * as Table from "$lib/components/ui/table";
@@ -71,9 +71,7 @@
                 toast.success(data.message || "兑换成功！");
                 redeemCode = "";
                 redeemDialogOpen = false;
-                // 兑换成功后刷新积分和统计数据
-                await afterCreditsEarned();
-                // 重新加载页面数据
+                // overview API 一次性刷新所有数据（余额+统计+历史+套餐+欠费）
                 await loadPageData();
             } else {
                 toast.error(data.error || "兑换失败");
