@@ -16,6 +16,7 @@ import type { RequestHandler } from './$types';
 import {
 	getUserBalance,
 	getUserActivePackages,
+	getUserInactivePackages,
 	getUserTransactions,
 	getUserDebts,
 	getUserCreditStats
@@ -31,9 +32,10 @@ export const GET: RequestHandler = async ({ locals }) => {
 	}
 
 	try {
-		const [balance, activePackages, transactions, debts, stats] = await Promise.all([
+		const [balance, activePackages, inactivePackages, transactions, debts, stats] = await Promise.all([
 			getUserBalance(userId),
 			getUserActivePackages(userId),
+			getUserInactivePackages(userId),
 			getUserTransactions(userId, HISTORY_LIMIT, 0),
 			getUserDebts(userId, false),
 			getUserCreditStats(userId)
@@ -45,6 +47,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			stats,
 			transactions,
 			packages: activePackages,
+			inactivePackages,
 			debts,
 			debtsTotal: debts.length,
 			debtsUnsettledCount: debts.filter((d) => !d.isSettled).length

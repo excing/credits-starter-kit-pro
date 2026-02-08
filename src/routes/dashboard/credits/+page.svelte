@@ -9,7 +9,7 @@
     import { Label } from "$lib/components/ui/label";
     import { Badge } from "$lib/components/ui/badge";
     import { Skeleton } from "$lib/components/ui/skeleton";
-    import { Coins, Gift, History, AlertCircle, AlertTriangle } from "lucide-svelte";
+    import { Coins, Gift, History, AlertCircle, AlertTriangle, TrendingUp, TrendingDown, Clock, ChevronDown, Package, Archive } from "lucide-svelte";
     import { toast } from "svelte-sonner";
 
     let loading = $state(true);
@@ -18,6 +18,8 @@
     let redeemCode = $state("");
     let transactions = $state<any[]>([]);
     let packages = $state<any[]>([]);
+    let inactivePackages = $state<any[]>([]);
+    let inactiveExpanded = $state(false);
     let debts = $state<any[]>([]);
     let debtsLoading = $state(true);
 
@@ -30,6 +32,7 @@
                 const data = await res.json();
                 transactions = data.transactions;
                 packages = data.packages;
+                inactivePackages = data.inactivePackages || [];
                 debts = data.debts;
                 // 同时更新 auth store 中的余额和统计数据
                 patchCurrentUser({
@@ -103,6 +106,24 @@
         return types[type] || { label: type, variant: "outline" };
     }
 
+    // 获取失效套餐的状态
+    function getInactiveStatus(pkg: any): { label: string; color: string } {
+        const now = new Date();
+        if (new Date(pkg.expiresAt) <= now) {
+            return { label: "已过期", color: "text-orange-600 dark:text-orange-400" };
+        }
+        if (pkg.creditsRemaining <= 0) {
+            return { label: "已用完", color: "text-muted-foreground" };
+        }
+        return { label: "已停用", color: "text-red-600 dark:text-red-400" };
+    }
+
+    // 计算积分使用百分比
+    function usagePercent(credits: number, total: number): number {
+        if (!total || total <= 0) return 0;
+        return Math.round((credits / total) * 100);
+    }
+
     onMount(() => {
         // 聚合 API 一次性加载所有数据（余额+统计+历史+套餐+欠费）
         loadPageData();
@@ -117,111 +138,86 @@
         </div>
     </div>
 
-    <!-- 积分统计卡片 -->
-    {#if $statsState.data}
-        <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-            <Card.Root>
-                <Card.Header>
-                    <Card.Title class="text-sm font-medium">总获得</Card.Title>
-                </Card.Header>
-                <Card.Content>
-                    {#if $statsState.loading}
-                        <Skeleton class="h-8 w-24" />
-                    {:else}
-                        <div class="text-2xl font-bold text-green-600">
-                            +{$statsState.data.totalEarned}
-                        </div>
-                        <p class="text-xs text-muted-foreground mt-1">
-                            累计获得积分
-                        </p>
-                    {/if}
-                </Card.Content>
-            </Card.Root>
+    <!-- 积分余额卡片 - 重新设计 -->
+    <div class="relative overflow-hidden rounded-xl border bg-gradient-to-br from-primary/5 via-background to-primary/10 p-6 sm:p-8">
+        <!-- 装饰性背景元素 -->
+        <div class="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-primary/5 blur-2xl"></div>
+        <div class="pointer-events-none absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-primary/5 blur-2xl"></div>
 
-            <Card.Root>
-                <Card.Header>
-                    <Card.Title class="text-sm font-medium">总消费</Card.Title>
-                </Card.Header>
-                <Card.Content>
-                    {#if $statsState.loading}
-                        <Skeleton class="h-8 w-24" />
-                    {:else}
-                        <div class="text-2xl font-bold text-red-600">
-                            -{$statsState.data.totalSpent}
-                        </div>
-                        <p class="text-xs text-muted-foreground mt-1">
-                            累计消费积分
-                        </p>
-                    {/if}
-                </Card.Content>
-            </Card.Root>
-
-            <Card.Root>
-                <Card.Header>
-                    <Card.Title class="text-sm font-medium">即将过期</Card.Title>
-                </Card.Header>
-                <Card.Content>
-                    {#if $statsState.loading}
-                        <Skeleton class="h-8 w-24" />
-                    {:else}
-                        <div class="text-2xl font-bold text-orange-600">
-                            {$statsState.data.expiringPackages.reduce((sum: number, pkg: any) => sum + pkg.creditsRemaining, 0)}
-                        </div>
-                        <p class="text-xs text-muted-foreground mt-1">
-                            30天内过期积分
-                        </p>
-                    {/if}
-                </Card.Content>
-            </Card.Root>
-        </div>
-    {/if}
-
-    <!-- 积分余额卡片 -->
-    <div class="grid gap-4 md:grid-cols-2">
-        <Card.Root>
-            <Card.Header>
-                <Card.Title class="flex items-center gap-2">
-                    <Coins class="h-5 w-5 text-primary" />
+        <div class="relative flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+            <!-- 左侧：余额信息 -->
+            <div class="flex-1 space-y-4">
+                <div class="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Coins class="h-4 w-4" />
                     可用积分
-                </Card.Title>
-            </Card.Header>
-            <Card.Content>
+                </div>
                 {#if loading}
-                    <Skeleton class="h-12 w-32" />
+                    <Skeleton class="h-14 w-40" />
+                    <Skeleton class="h-4 w-24 mt-2" />
                 {:else}
-                    <div class="text-4xl font-bold text-primary">
-                        {$authState.user?.credits ?? 0}
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-5xl font-extrabold tracking-tight text-primary sm:text-6xl">
+                            {$authState.user?.credits ?? 0}
+                        </span>
+                        <span class="text-lg text-muted-foreground">积分</span>
                     </div>
-                    <p class="text-sm text-muted-foreground mt-2">
-                        来自 {$authState.user?.activePackages ?? 0} 个有效套餐
-                    </p>
+                    <div class="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Package class="h-3.5 w-3.5" />
+                        <span>来自 {$authState.user?.activePackages ?? 0} 个有效套餐</span>
+                    </div>
                 {/if}
-            </Card.Content>
-            <Card.Footer>
+
+                <!-- 统计摘要 -->
+                {#if !loading && $statsState.data && !$statsState.loading}
+                    <div class="flex flex-wrap items-center gap-4 pt-4 border-t border-border/50">
+                        <div class="flex items-center gap-1.5">
+                            <TrendingUp class="h-3.5 w-3.5 text-green-600" />
+                            <span class="text-sm font-medium text-green-600">+{$statsState.data.totalEarned}</span>
+                            <span class="text-xs text-muted-foreground">总获得</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <TrendingDown class="h-3.5 w-3.5 text-red-600" />
+                            <span class="text-sm font-medium text-red-600">-{$statsState.data.totalSpent}</span>
+                            <span class="text-xs text-muted-foreground">总消费</span>
+                        </div>
+                        {#if $statsState.data.totalExpired > 0}
+                            <div class="flex items-center gap-1.5">
+                                <Clock class="h-3.5 w-3.5 text-orange-600" />
+                                <span class="text-sm font-medium text-orange-600">{$statsState.data.totalExpired}</span>
+                                <span class="text-xs text-muted-foreground">已过期</span>
+                            </div>
+                        {/if}
+                    </div>
+                {/if}
+            </div>
+
+            <!-- 右侧：兑换按钮 -->
+            <div class="flex flex-col items-stretch gap-3 sm:items-end sm:min-w-[160px]">
                 <Button
                     onclick={() => (redeemDialogOpen = true)}
-                    class="w-full"
+                    size="lg"
+                    class="gap-2"
                 >
-                    <Gift class="mr-2 h-4 w-4" />
+                    <Gift class="h-4 w-4" />
                     兑换积分
                 </Button>
-            </Card.Footer>
-        </Card.Root>
+                <div class="text-center sm:text-right">
+                    <p class="text-xs text-muted-foreground leading-relaxed">
+                        输入兑换码获取积分套餐
+                    </p>
+                </div>
+            </div>
+        </div>
 
-        <Card.Root>
-            <Card.Header>
-                <Card.Title class="flex items-center gap-2">
-                    <AlertCircle class="h-5 w-5" />
-                    使用说明
-                </Card.Title>
-            </Card.Header>
-            <Card.Content class="space-y-2 text-sm">
-                <p>• AI 聊天按 token 数量计费（1 积分/1000 tokens）</p>
-                <p>• 图片生成固定计费（5 积分/张）</p>
-                <p>• 积分套餐有有效期，请及时使用</p>
-                <p>• 优先消耗即将过期的套餐积分</p>
-            </Card.Content>
-        </Card.Root>
+        <!-- 使用说明 - 折叠在底部 -->
+        <div class="relative mt-4 pt-4 border-t border-border/50">
+            <div class="grid gap-x-6 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2">
+                <p>  AI 聊天按 token 数量计费（1 积分/1000 tokens）</p>
+                <p>  图片生成固定计费（5 积分/张）</p>
+                <p>  积分套餐有有效期，请及时使用</p>
+                <p>  优先消耗即将过期的套餐积分</p>
+            </div>
+        </div>
     </div>
 
     <!-- 即将过期提醒 -->
@@ -232,7 +228,7 @@
                     <AlertCircle class="h-5 w-5" />
                     即将过期提醒
                 </Card.Title>
-                <Card.Description>以下套餐将在 30 天内过期</Card.Description>
+                <Card.Description>以下套餐将在 7 天内过期</Card.Description>
             </Card.Header>
             <Card.Content>
                 <div class="space-y-2">
@@ -329,6 +325,68 @@
                 </div>
             </Card.Content>
         </Card.Root>
+    {/if}
+
+    <!-- 失效套餐（默认折叠） -->
+    {#if !loading && inactivePackages.length > 0}
+        <div class="rounded-lg border">
+            <button
+                type="button"
+                onclick={() => (inactiveExpanded = !inactiveExpanded)}
+                class="flex w-full items-center justify-between p-4 text-left hover:bg-muted/50 transition-colors rounded-lg"
+            >
+                <div class="flex items-center gap-2">
+                    <Archive class="h-4 w-4 text-muted-foreground" />
+                    <span class="font-medium">失效套餐</span>
+                    <Badge variant="secondary" class="text-xs">{inactivePackages.length}</Badge>
+                </div>
+                <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform duration-200 {inactiveExpanded ? 'rotate-180' : ''}" />
+            </button>
+            {#if inactiveExpanded}
+                <div class="border-t px-4 pb-4 pt-3">
+                    <p class="text-xs text-muted-foreground mb-3">已使用完毕或已过期的套餐</p>
+                    <div class="space-y-2">
+                        {#each inactivePackages as pkg}
+                            {@const status = getInactiveStatus(pkg)}
+                            <div class="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2">
+                                        <p class="text-sm font-medium text-muted-foreground">
+                                            {pkg.creditsRemaining} / {pkg.creditsTotal} 积分
+                                        </p>
+                                    </div>
+                                    <div class="flex items-center gap-3 mt-1">
+                                        <p class="text-xs text-muted-foreground">
+                                            过期时间: {formatDate(pkg.expiresAt)}
+                                        </p>
+                                        <span class="text-xs text-muted-foreground">
+                                            已使用 {usagePercent(pkg.creditsTotal - pkg.creditsRemaining, pkg.creditsTotal)}%
+                                        </span>
+                                    </div>
+                                    <!-- 使用量进度条 -->
+                                    <div class="mt-2 h-1 w-full rounded-full bg-muted overflow-hidden">
+                                        <div
+                                            class="h-full rounded-full bg-muted-foreground/30 transition-all"
+                                            style="width: {usagePercent(pkg.creditsTotal - pkg.creditsRemaining, pkg.creditsTotal)}%"
+                                        ></div>
+                                    </div>
+                                </div>
+                                <div class="ml-3 flex flex-col items-end gap-1">
+                                    <span class="text-xs font-medium {status.color}">{status.label}</span>
+                                    <Badge variant="outline" class="text-xs">
+                                        {pkg.source === "redemption"
+                                            ? "兑换"
+                                            : pkg.source === "purchase"
+                                              ? "购买"
+                                              : "赠送"}
+                                    </Badge>
+                                </div>
+                            </div>
+                        {/each}
+                    </div>
+                </div>
+            {/if}
+        </div>
     {/if}
 
     <!-- 交易历史 -->

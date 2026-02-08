@@ -15,6 +15,7 @@ export type AuthUser = {
 export type UserStats = {
 	totalSpent: number;
 	totalEarned: number;
+	totalExpired: number;
 	expiringPackages: Array<{
 		creditsRemaining: number;
 		daysUntilExpiry: number;

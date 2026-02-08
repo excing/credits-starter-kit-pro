@@ -90,6 +90,29 @@ export async function getUserActivePackages(userId: string) {
 }
 
 /**
+ * 获取用户所有失效套餐（已用完、已过期、已停用）
+ */
+export async function getUserInactivePackages(userId: string, limit: number = 20) {
+    const now = new Date();
+
+    return await db
+        .select()
+        .from(userCreditPackage)
+        .where(
+            and(
+                eq(userCreditPackage.userId, userId),
+                sql`(
+                    ${userCreditPackage.isActive} = false
+                    OR ${userCreditPackage.expiresAt} <= ${now}
+                    OR ${userCreditPackage.creditsRemaining} <= 0
+                )`
+            )
+        )
+        .orderBy(sql`${userCreditPackage.expiresAt} DESC`)
+        .limit(limit);
+}
+
+/**
  * 发放套餐给用户（带欠费结算）
  */
 export async function grantPackageToUser(
@@ -780,6 +803,7 @@ export interface UserCreditStats {
         expiresAt: Date;
         daysUntilExpiry: number;
     }>;
+    totalExpired: number;
     totalDebt: number;
     debtCount: number;
 }
@@ -789,14 +813,15 @@ export interface UserCreditStats {
  */
 export async function getUserCreditStats(userId: string): Promise<UserCreditStats> {
     const now = new Date();
-    const thirtyDaysLater = new Date();
-    thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
+    const sevenDaysLater = new Date();
+    sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
 
     const [
         totalSpentResult,
         totalEarnedResult,
         spendingByType,
         expiringPkgs,
+        totalExpiredResult,
         totalDebt,
         debtCountResult
     ] = await Promise.all([
@@ -826,10 +851,20 @@ export async function getUserCreditStats(userId: string): Promise<UserCreditStat
                     eq(userCreditPackage.isActive, true),
                     gt(userCreditPackage.creditsRemaining, 0),
                     gt(userCreditPackage.expiresAt, now),
-                    sql`${userCreditPackage.expiresAt} <= ${thirtyDaysLater}`
+                    sql`${userCreditPackage.expiresAt} <= ${sevenDaysLater}`
                 )
             )
             .orderBy(userCreditPackage.expiresAt),
+        db
+            .select({ total: sql<number>`COALESCE(SUM(${userCreditPackage.creditsRemaining}), 0)` })
+            .from(userCreditPackage)
+            .where(
+                and(
+                    eq(userCreditPackage.userId, userId),
+                    gt(userCreditPackage.creditsRemaining, 0),
+                    sql`${userCreditPackage.expiresAt} <= ${now}`
+                )
+            ),
         getUserTotalDebt(userId),
         db
             .select({ count: sql<number>`COUNT(*)` })
@@ -853,6 +888,7 @@ export async function getUserCreditStats(userId: string): Promise<UserCreditStat
                 (pkg.expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
             )
         })),
+        totalExpired: Number(totalExpiredResult[0]?.total ?? 0),
         totalDebt,
         debtCount: Number(debtCountResult[0]?.count ?? 0)
     };
