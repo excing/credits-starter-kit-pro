@@ -13,10 +13,13 @@
  */
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
-import { creditTransaction, userCreditPackage, creditDebt } from '$lib/server/db/schema';
-import { eq, and, sql, gt } from 'drizzle-orm';
-import { getUserBalance, getUserActivePackages, getUserTransactions, getUserDebts, getUserTotalDebt } from '$lib/server/credits';
+import {
+	getUserBalance,
+	getUserActivePackages,
+	getUserTransactions,
+	getUserDebts,
+	getUserCreditStats
+} from '$lib/server/credits';
 
 const HISTORY_LIMIT = 20;
 
@@ -28,112 +31,18 @@ export const GET: RequestHandler = async ({ locals }) => {
 	}
 
 	try {
-		const now = new Date();
-		const thirtyDaysLater = new Date();
-		thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
-
-		// 并行执行所有查询
-		const [
-			balance,
-			activePackages,
-			transactions,
-			debts,
-			totalSpentResult,
-			totalEarnedResult,
-			spendingByType,
-			expiringPackages,
-			totalDebt,
-			debtCountResult
-		] = await Promise.all([
+		const [balance, activePackages, transactions, debts, stats] = await Promise.all([
 			getUserBalance(userId),
 			getUserActivePackages(userId),
 			getUserTransactions(userId, HISTORY_LIMIT, 0),
 			getUserDebts(userId, false),
-			db
-				.select({
-					total: sql<number>`COALESCE(SUM(ABS(${creditTransaction.amount})), 0)`
-				})
-				.from(creditTransaction)
-				.where(
-					and(
-						eq(creditTransaction.userId, userId),
-						sql`${creditTransaction.amount} < 0`
-					)
-				),
-			db
-				.select({
-					total: sql<number>`COALESCE(SUM(${creditTransaction.amount}), 0)`
-				})
-				.from(creditTransaction)
-				.where(
-					and(
-						eq(creditTransaction.userId, userId),
-						sql`${creditTransaction.amount} > 0`
-					)
-				),
-			db
-				.select({
-					type: creditTransaction.type,
-					total: sql<number>`COALESCE(SUM(ABS(${creditTransaction.amount})), 0)`,
-					count: sql<number>`COUNT(*)`
-				})
-				.from(creditTransaction)
-				.where(
-					and(
-						eq(creditTransaction.userId, userId),
-						sql`${creditTransaction.amount} < 0`
-					)
-				)
-				.groupBy(creditTransaction.type),
-			db
-				.select()
-				.from(userCreditPackage)
-				.where(
-					and(
-						eq(userCreditPackage.userId, userId),
-						eq(userCreditPackage.isActive, true),
-						gt(userCreditPackage.creditsRemaining, 0),
-						gt(userCreditPackage.expiresAt, now),
-						sql`${userCreditPackage.expiresAt} <= ${thirtyDaysLater}`
-					)
-				)
-				.orderBy(userCreditPackage.expiresAt),
-			getUserTotalDebt(userId),
-			db
-				.select({
-					count: sql<number>`COUNT(*)`
-				})
-				.from(creditDebt)
-				.where(
-					and(
-						eq(creditDebt.userId, userId),
-						eq(creditDebt.isSettled, false)
-					)
-				)
+			getUserCreditStats(userId)
 		]);
 
 		return json({
 			balance,
 			activePackages: activePackages.length,
-			stats: {
-				totalSpent: Number(totalSpentResult[0]?.total ?? 0),
-				totalEarned: Number(totalEarnedResult[0]?.total ?? 0),
-				spendingByType: spendingByType.map((item) => ({
-					type: item.type,
-					total: Number(item.total),
-					count: Number(item.count)
-				})),
-				expiringPackages: expiringPackages.map((pkg) => ({
-					id: pkg.id,
-					creditsRemaining: pkg.creditsRemaining,
-					expiresAt: pkg.expiresAt,
-					daysUntilExpiry: Math.ceil(
-						(pkg.expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-					)
-				})),
-				totalDebt,
-				debtCount: Number(debtCountResult[0]?.count ?? 0)
-			},
+			stats,
 			transactions,
 			packages: activePackages,
 			debts,

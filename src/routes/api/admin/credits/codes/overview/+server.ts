@@ -10,10 +10,8 @@
  */
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { db } from '$lib/server/db';
-import { creditPackage, redemptionCode } from '$lib/server/db/schema';
+import { getAllPackages, getRedemptionCodes } from '$lib/server/credits';
 import { isAdmin } from '$lib/server/auth-utils';
-import { desc, eq, count } from 'drizzle-orm';
 
 const CODES_LIMIT = 10;
 
@@ -25,44 +23,14 @@ export const GET: RequestHandler = async ({ locals }) => {
 	}
 
 	try {
-		const [packages, codes, codesTotal] = await Promise.all([
-			db.select().from(creditPackage).orderBy(creditPackage.credits),
-
-			db
-				.select({
-					id: redemptionCode.id,
-					code: redemptionCode.id,
-					packageId: redemptionCode.packageId,
-					maxUses: redemptionCode.maxUses,
-					usedCount: redemptionCode.currentUses,
-					expiresAt: redemptionCode.codeExpiresAt,
-					isActive: redemptionCode.isActive,
-					createdAt: redemptionCode.createdAt,
-					package: {
-						id: creditPackage.id,
-						name: creditPackage.name,
-						credits: creditPackage.credits,
-						validityDays: creditPackage.validityDays
-					}
-				})
-				.from(redemptionCode)
-				.leftJoin(creditPackage, eq(creditPackage.id, redemptionCode.packageId))
-				.limit(CODES_LIMIT)
-				.offset(0)
-				.orderBy(desc(redemptionCode.createdAt)),
-
-			db
-				.select({ count: count() })
-				.from(redemptionCode)
-				.then((result) => result[0].count)
+		const [packages, codesResult] = await Promise.all([
+			getAllPackages(),
+			getRedemptionCodes(CODES_LIMIT, 0)
 		]);
 
 		return json({
 			packages,
-			codes: {
-				items: codes,
-				total: codesTotal
-			}
+			codes: { items: codesResult.codes, total: codesResult.total }
 		});
 	} catch (error) {
 		console.error('获取兑换码概览失败:', error);

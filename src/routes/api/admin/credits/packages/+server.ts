@@ -2,8 +2,8 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { creditPackage } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
 import { isAdmin } from '$lib/server/auth-utils';
+import { getAllPackages } from '$lib/server/credits';
 
 export const GET: RequestHandler = async ({ locals }) => {
     const userId = locals.session?.user?.id;
@@ -18,11 +18,7 @@ export const GET: RequestHandler = async ({ locals }) => {
     }
 
     try {
-        const packages = await db
-            .select()
-            .from(creditPackage)
-            .orderBy(creditPackage.credits);
-
+        const packages = await getAllPackages();
         return json({ packages });
     } catch (error) {
         console.error('获取套餐列表失败:', error);

@@ -1,5 +1,6 @@
 import { db } from './db';
 import {
+    user,
     creditPackage,
     userCreditPackage,
     creditTransaction,
@@ -7,7 +8,7 @@ import {
     redemptionHistory,
     creditDebt
 } from './db/schema';
-import { eq, and, lt, gt, sql } from 'drizzle-orm';
+import { eq, and, lt, gt, gte, sql, desc, count } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { getOperationCost, type OperationCostConfig } from './operation-costs.config';
 
@@ -765,4 +766,238 @@ export async function getUserTotalDebt(userId: string): Promise<number> {
         );
 
     return Number(result[0]?.totalDebt ?? 0);
+}
+
+// ============ 用户统计查询 ============
+
+export interface UserCreditStats {
+    totalSpent: number;
+    totalEarned: number;
+    spendingByType: Array<{ type: string; total: number; count: number }>;
+    expiringPackages: Array<{
+        id: string;
+        creditsRemaining: number;
+        expiresAt: Date;
+        daysUntilExpiry: number;
+    }>;
+    totalDebt: number;
+    debtCount: number;
+}
+
+/**
+ * 获取用户积分统计（总消费、总获得、按类型分组、即将过期、欠费）
+ */
+export async function getUserCreditStats(userId: string): Promise<UserCreditStats> {
+    const now = new Date();
+    const thirtyDaysLater = new Date();
+    thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
+
+    const [
+        totalSpentResult,
+        totalEarnedResult,
+        spendingByType,
+        expiringPkgs,
+        totalDebt,
+        debtCountResult
+    ] = await Promise.all([
+        db
+            .select({ total: sql<number>`COALESCE(SUM(ABS(${creditTransaction.amount})), 0)` })
+            .from(creditTransaction)
+            .where(and(eq(creditTransaction.userId, userId), sql`${creditTransaction.amount} < 0`)),
+        db
+            .select({ total: sql<number>`COALESCE(SUM(${creditTransaction.amount}), 0)` })
+            .from(creditTransaction)
+            .where(and(eq(creditTransaction.userId, userId), sql`${creditTransaction.amount} > 0`)),
+        db
+            .select({
+                type: creditTransaction.type,
+                total: sql<number>`COALESCE(SUM(ABS(${creditTransaction.amount})), 0)`,
+                count: sql<number>`COUNT(*)`
+            })
+            .from(creditTransaction)
+            .where(and(eq(creditTransaction.userId, userId), sql`${creditTransaction.amount} < 0`))
+            .groupBy(creditTransaction.type),
+        db
+            .select()
+            .from(userCreditPackage)
+            .where(
+                and(
+                    eq(userCreditPackage.userId, userId),
+                    eq(userCreditPackage.isActive, true),
+                    gt(userCreditPackage.creditsRemaining, 0),
+                    gt(userCreditPackage.expiresAt, now),
+                    sql`${userCreditPackage.expiresAt} <= ${thirtyDaysLater}`
+                )
+            )
+            .orderBy(userCreditPackage.expiresAt),
+        getUserTotalDebt(userId),
+        db
+            .select({ count: sql<number>`COUNT(*)` })
+            .from(creditDebt)
+            .where(and(eq(creditDebt.userId, userId), eq(creditDebt.isSettled, false)))
+    ]);
+
+    return {
+        totalSpent: Number(totalSpentResult[0]?.total ?? 0),
+        totalEarned: Number(totalEarnedResult[0]?.total ?? 0),
+        spendingByType: spendingByType.map((item) => ({
+            type: item.type,
+            total: Number(item.total),
+            count: Number(item.count)
+        })),
+        expiringPackages: expiringPkgs.map((pkg) => ({
+            id: pkg.id,
+            creditsRemaining: pkg.creditsRemaining,
+            expiresAt: pkg.expiresAt,
+            daysUntilExpiry: Math.ceil(
+                (pkg.expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+            )
+        })),
+        totalDebt,
+        debtCount: Number(debtCountResult[0]?.count ?? 0)
+    };
+}
+
+// ============ 管理员查询 ============
+
+/**
+ * 获取所有积分套餐
+ */
+export async function getAllPackages() {
+    return db.select().from(creditPackage).orderBy(creditPackage.credits);
+}
+
+/**
+ * 获取兑换码列表（分页，带关联套餐信息）
+ */
+export async function getRedemptionCodes(limit: number, offset: number) {
+    const [codes, totalCount] = await Promise.all([
+        db
+            .select({
+                id: redemptionCode.id,
+                code: redemptionCode.id,
+                packageId: redemptionCode.packageId,
+                maxUses: redemptionCode.maxUses,
+                usedCount: redemptionCode.currentUses,
+                expiresAt: redemptionCode.codeExpiresAt,
+                isActive: redemptionCode.isActive,
+                createdAt: redemptionCode.createdAt,
+                package: {
+                    id: creditPackage.id,
+                    name: creditPackage.name,
+                    credits: creditPackage.credits,
+                    validityDays: creditPackage.validityDays
+                }
+            })
+            .from(redemptionCode)
+            .leftJoin(creditPackage, eq(creditPackage.id, redemptionCode.packageId))
+            .limit(limit)
+            .offset(offset)
+            .orderBy(desc(redemptionCode.createdAt)),
+        db
+            .select({ count: count() })
+            .from(redemptionCode)
+            .then((result) => result[0].count)
+    ]);
+    return { codes, total: totalCount };
+}
+
+/**
+ * 获取管理员欠费列表（分页，可按结清状态过滤）
+ */
+export async function getAdminDebts(
+    limit: number,
+    offset: number,
+    settled?: 'true' | 'false'
+) {
+    const condition =
+        settled === 'true'
+            ? eq(creditDebt.isSettled, true)
+            : settled === 'false'
+                ? eq(creditDebt.isSettled, false)
+                : undefined;
+
+    const [debts, totalCount] = await Promise.all([
+        condition
+            ? db.select().from(creditDebt).where(condition).limit(limit).offset(offset).orderBy(desc(creditDebt.createdAt))
+            : db.select().from(creditDebt).limit(limit).offset(offset).orderBy(desc(creditDebt.createdAt)),
+        condition
+            ? db.select({ count: count() }).from(creditDebt).where(condition).then((r) => r[0].count)
+            : db.select({ count: count() }).from(creditDebt).then((r) => r[0].count)
+    ]);
+
+    return {
+        debts: debts.map((d) => ({
+            ...d,
+            metadata: d.metadata ? JSON.parse(d.metadata) : null
+        })),
+        total: totalCount
+    };
+}
+
+export interface AdminOverviewStats {
+    revenue: { total: number; week: number };
+    users: { total: number; week: number };
+    credits: { totalGranted: number; totalConsumed: number; totalRemaining: number; weekGranted: number };
+}
+
+/**
+ * 获取管理员概览统计（收入、用户、积分）
+ */
+export async function getAdminOverviewStats(): Promise<AdminOverviewStats> {
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    weekStart.setHours(0, 0, 0, 0);
+
+    const [
+        revenueResult,
+        weekRevenueResult,
+        userCountResult,
+        weekUserCountResult,
+        creditsResult,
+        weekCreditsResult
+    ] = await Promise.all([
+        db
+            .select({ totalRevenue: sql<number>`COALESCE(SUM(${creditPackage.price}), 0)` })
+            .from(redemptionHistory)
+            .innerJoin(creditPackage, eq(redemptionHistory.packageId, creditPackage.id)),
+        db
+            .select({ weekRevenue: sql<number>`COALESCE(SUM(${creditPackage.price}), 0)` })
+            .from(redemptionHistory)
+            .innerJoin(creditPackage, eq(redemptionHistory.packageId, creditPackage.id))
+            .where(gte(redemptionHistory.redeemedAt, weekStart)),
+        db.select({ count: sql<number>`COUNT(*)` }).from(user),
+        db.select({ count: sql<number>`COUNT(*)` }).from(user).where(gte(user.createdAt, weekStart)),
+        db
+            .select({
+                totalGranted: sql<number>`COALESCE(SUM(${userCreditPackage.creditsTotal}), 0)`,
+                totalRemaining: sql<number>`COALESCE(SUM(${userCreditPackage.creditsRemaining}), 0)`
+            })
+            .from(userCreditPackage),
+        db
+            .select({ weekGranted: sql<number>`COALESCE(SUM(${userCreditPackage.creditsTotal}), 0)` })
+            .from(userCreditPackage)
+            .where(gte(userCreditPackage.grantedAt, weekStart))
+    ]);
+
+    const totalGranted = Number(creditsResult[0]?.totalGranted ?? 0);
+    const totalRemaining = Number(creditsResult[0]?.totalRemaining ?? 0);
+
+    return {
+        revenue: {
+            total: Number(revenueResult[0]?.totalRevenue ?? 0),
+            week: Number(weekRevenueResult[0]?.weekRevenue ?? 0)
+        },
+        users: {
+            total: Number(userCountResult[0]?.count ?? 0),
+            week: Number(weekUserCountResult[0]?.count ?? 0)
+        },
+        credits: {
+            totalGranted,
+            totalConsumed: totalGranted - totalRemaining,
+            totalRemaining,
+            weekGranted: Number(weekCreditsResult[0]?.weekGranted ?? 0)
+        }
+    };
 }
