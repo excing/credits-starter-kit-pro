@@ -208,15 +208,18 @@ export async function refreshUserStats(): Promise<UserStats | null> {
 }
 
 /**
- * 初始化 Dashboard 完整数据（积分余额 + 统计数据）
- * 首次进入 dashboard 时调用，使用聚合 API 减少请求数
+ * 初始化 Dashboard 概览数据（积分余额 + 统计摘要）
+ * 首次进入 dashboard 时调用，使用轻量 API 只获取概览所需数据
+ * 不包含 transactions / packages / debts（由 credits 页面独立加载）
  */
 export async function initDashboardData(): Promise<void> {
 	const state = get(_authState);
 	if (!state.user) return;
 
+	_statsState.update((s) => ({ ...s, loading: true }));
+
 	try {
-		const response = await fetch('/api/user/credits/overview');
+		const response = await fetch('/api/user/credits/dashboard-stats');
 		if (response.ok) {
 			const data = await response.json();
 			// 更新余额

@@ -9,9 +9,9 @@
     } from "lucide-svelte";
     import { authState, statsState } from "$lib/stores/auth";
 
-    // 前两张卡片依赖 authState，后两张依赖 statsState
-    let authLoading = $derived(!$authState.loaded);
-    let statsLoading = $derived($statsState.loading);
+    // 积分数据在 initDashboardData 完成前为 undefined，以此判断是否还在加载
+    let creditsLoading = $derived($authState.user?.credits === undefined);
+    let statsLoading = $derived(!$statsState.loaded || $statsState.loading);
 
     const cards = $derived([
         {
@@ -21,7 +21,7 @@
             trending: "up",
             icon: Coins,
             href: "/dashboard/credits",
-            loading: authLoading,
+            loading: creditsLoading,
         },
         {
             title: "有效套餐",
@@ -30,7 +30,7 @@
             trending: "neutral",
             icon: Package,
             href: "/dashboard/credits",
-            loading: authLoading,
+            loading: creditsLoading,
         },
         {
             title: "总消费",
