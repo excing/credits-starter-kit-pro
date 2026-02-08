@@ -1035,3 +1035,54 @@ export async function getAdminOverviewStats(): Promise<AdminOverviewStats> {
         }
     };
 }
+
+/**
+ * 获取管理员概览页面所需的汇总计数（轻量级，不返回具体数据）
+ */
+export async function getAdminOverviewCounts(): Promise<{
+    totalPackages: number;
+    totalCodes: number;
+    totalRedemptions: number;
+    unsettledDebts: number;
+    unsettledDebtAmount: number;
+}> {
+    const [packageCount, codeCount, redemptionCount, unsettledDebtResult] = await Promise.all([
+        db.select({ count: count() }).from(creditPackage).then((r) => r[0].count),
+        db.select({ count: count() }).from(redemptionCode).then((r) => r[0].count),
+        db.select({ count: count() }).from(redemptionHistory).then((r) => r[0].count),
+        db
+            .select({
+                count: count(),
+                totalAmount: sql<number>`COALESCE(SUM(${creditDebt.amount}), 0)`
+            })
+            .from(creditDebt)
+            .where(eq(creditDebt.isSettled, false))
+            .then((r) => r[0])
+    ]);
+
+    return {
+        totalPackages: packageCount,
+        totalCodes: codeCount,
+        totalRedemptions: redemptionCount,
+        unsettledDebts: unsettledDebtResult.count,
+        unsettledDebtAmount: Number(unsettledDebtResult.totalAmount)
+    };
+}
+
+/**
+ * 获取兑换码和兑换历史的汇总计数（用于兑换码页面统计卡片）
+ */
+export async function getCodePageCounts(): Promise<{
+    totalCodes: number;
+    totalRedemptions: number;
+}> {
+    const [codeCount, redemptionCount] = await Promise.all([
+        db.select({ count: count() }).from(redemptionCode).then((r) => r[0].count),
+        db.select({ count: count() }).from(redemptionHistory).then((r) => r[0].count)
+    ]);
+
+    return {
+        totalCodes: codeCount,
+        totalRedemptions: redemptionCount
+    };
+}

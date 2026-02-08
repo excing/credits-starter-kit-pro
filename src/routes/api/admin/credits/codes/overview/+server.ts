@@ -2,15 +2,17 @@
  * 管理员兑换码页面聚合 API
  * GET /api/admin/credits/codes/overview
  *
- * 将以下 2 个请求合并为 1 个（仅用于页面初始加载）：
- * - /api/admin/credits/packages (套餐列表，生成兑换码需要)
- * - /api/admin/credits/codes (兑换码列表，固定首页)
+ * 将以下请求合并为 1 个（用于页面初始加载）：
+ * - 套餐列表（生成兑换码需要）
+ * - 兑换码列表（默认加载"有效"状态）
+ * - 固定的汇总计数（兑换码总数 + 总兑换次数，进入页面后固定不变）
  *
- * 分页操作仍由 /api/admin/credits/codes 处理。
+ * 兑换历史使用懒加载，用户点击 Tab 时由 /api/admin/credits/codes/history 加载。
+ * 分页/筛选操作仍由各独立 API 处理。
  */
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getAllPackages, getRedemptionCodes } from '$lib/server/credits';
+import { getAllPackages, getRedemptionCodes, getCodePageCounts } from '$lib/server/credits';
 import { isAdmin } from '$lib/server/auth-utils';
 
 const CODES_LIMIT = 10;
@@ -23,14 +25,16 @@ export const GET: RequestHandler = async ({ locals }) => {
 	}
 
 	try {
-		const [packages, codesResult] = await Promise.all([
+		const [packages, codesResult, snapshotCounts] = await Promise.all([
 			getAllPackages(),
-			getRedemptionCodes(CODES_LIMIT, 0)
+			getRedemptionCodes(CODES_LIMIT, 0, { status: 'active' }),
+			getCodePageCounts()
 		]);
 
 		return json({
 			packages,
-			codes: { items: codesResult.codes, total: codesResult.total }
+			codes: { items: codesResult.codes, total: codesResult.total },
+			snapshotCounts
 		});
 	} catch (error) {
 		console.error('获取兑换码概览失败:', error);

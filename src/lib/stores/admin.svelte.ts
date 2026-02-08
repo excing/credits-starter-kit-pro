@@ -123,6 +123,18 @@ class AdminStore {
 	});
 	overviewLoading = $state(true);
 
+	// 概览页面卡片计数（轻量级，从服务端获取）
+	overviewCounts = $state({
+		totalPackages: 0,
+		totalCodes: 0,
+		totalRedemptions: 0,
+		unsettledDebts: 0,
+		unsettledDebtAmount: 0
+	});
+
+	// 兑换码页面快照计数（进入页面时固定，不随筛选变化）
+	codePageSnapshotCounts = $state({ totalCodes: 0, totalRedemptions: 0 });
+
 	// 套餐状态
 	packages = $state<CreditPackage[]>([]);
 	packagesLoading = $state(true);
@@ -133,8 +145,8 @@ class AdminStore {
 	// 兑换历史分页状态
 	history = new PaginatedState<RedemptionHistoryItem>(20);
 
-	// 兑换码筛选状态
-	codeStatusFilter = $state<'all' | 'active' | 'used' | 'expired' | 'disabled'>('all');
+	// 兑换码筛选状态（默认显示"有效"状态的兑换码）
+	codeStatusFilter = $state<'all' | 'active' | 'used' | 'expired' | 'disabled'>('active');
 	codePackageFilter = $state<string>('');
 
 	// 欠费分页状态
@@ -179,15 +191,9 @@ class AdminStore {
 
 	// ============ 派生状态 ============
 
+	/** 概览页面卡片使用的计数（来自服务端轻量查询） */
 	get stats() {
-		return {
-			totalPackages: this.packages.length,
-			totalCodes: this.codes.total,
-			totalDebts: this.debts.items
-				.filter((d) => !d.isSettled)
-				.reduce((sum, d) => sum + d.amount, 0),
-			unsettledDebts: this.debts.items.filter((d) => !d.isSettled).length
-		};
+		return this.overviewCounts;
 	}
 
 	// ============ 操作状态管理 ============
@@ -486,6 +492,11 @@ class AdminStore {
 
 			if (res.ok) {
 				this.generatedCodes = data.codes;
+				// 更新快照计数：新增了兑换码
+				this.codePageSnapshotCounts = {
+					...this.codePageSnapshotCounts,
+					totalCodes: this.codePageSnapshotCounts.totalCodes + data.codes.length
+				};
 				toast.success(`成功生成 ${data.codes.length} 个兑换码！`);
 				await this.loadCodes();
 				return true;
@@ -569,6 +580,11 @@ class AdminStore {
 			});
 
 			if (res.ok) {
+				// 更新快照计数：删除了兑换码
+				this.codePageSnapshotCounts = {
+					...this.codePageSnapshotCounts,
+					totalCodes: Math.max(0, this.codePageSnapshotCounts.totalCodes - 1)
+				};
 				toast.success('兑换码删除成功！');
 				return true;
 			} else {
@@ -767,25 +783,19 @@ class AdminStore {
 
 	// ============ 初始化 ============
 
+	/**
+	 * 概览页面初始化：仅加载统计数据和汇总计数（轻量级）
+	 * 不加载具体的套餐/兑换码/欠费数据，各子页面自行加载。
+	 */
 	async init() {
-		// 使用聚合 API 一次性加载所有数据（4个请求 -> 1个请求）
-		this.packagesLoading = true;
-		this.codes.loading = true;
-		this.debts.loading = true;
 		this.overviewLoading = true;
 
 		try {
 			const res = await fetch('/api/admin/credits/overview');
 			if (res.ok) {
 				const data = await res.json();
-				this.packages = data.packages;
-				this.codes.items = data.codes.items;
-				this.codes.total = data.codes.total;
-				this.codes.initialized = true;
-				this.debts.items = data.debts.items;
-				this.debts.total = data.debts.total;
-				this.debts.initialized = true;
 				this.overviewStats = data.stats;
+				this.overviewCounts = data.counts;
 			} else {
 				toast.error('加载管理数据失败');
 			}
@@ -793,19 +803,26 @@ class AdminStore {
 			console.error('管理数据初始化失败:', error);
 			toast.error('加载失败');
 		} finally {
-			this.packagesLoading = false;
-			this.codes.loading = false;
-			this.debts.loading = false;
 			this.overviewLoading = false;
 		}
 	}
 
 	/**
-	 * 兑换码页面初始化：聚合加载套餐+兑换码（2个请求 -> 1个请求）
+	 * 兑换码页面初始化：聚合加载套餐 + 兑换码（默认有效状态）+ 快照计数
+	 * 兑换历史使用懒加载，用户点击 Tab 时再加载。
+	 * 每次进入/返回页面都会重新加载，确保数据最新。
 	 */
 	async initCodesPage() {
 		this.packagesLoading = true;
 		this.codes.loading = true;
+
+		// 重置筛选和分页到默认状态
+		this.codeStatusFilter = 'active';
+		this.codePackageFilter = '';
+		this.codes.page = 1;
+		this.codesTab = 'codes';
+		// 重置历史状态，确保切换 Tab 时重新加载
+		this.history.reset();
 
 		try {
 			const res = await fetch('/api/admin/credits/codes/overview');
@@ -815,6 +832,7 @@ class AdminStore {
 				this.codes.items = data.codes.items;
 				this.codes.total = data.codes.total;
 				this.codes.initialized = true;
+				this.codePageSnapshotCounts = data.snapshotCounts;
 			} else {
 				toast.error('加载兑换码数据失败');
 			}

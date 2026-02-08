@@ -12,16 +12,11 @@
 	import { AdminDialogs, CodeRow } from '$lib/components/admin';
 
 	onMount(() => {
-		// 使用聚合 API 一次性加载套餐+兑换码（2个请求 -> 1个请求）
-		if (adminStore.packages.length === 0 || !adminStore.codes.initialized) {
-			adminStore.initCodesPage();
-		} else if (!adminStore.codes.initialized) {
-			adminStore.codes.initialized = true;
-			adminStore.loadCodes();
-		}
+		// 每次进入/返回页面都重新加载数据，确保最新
+		adminStore.initCodesPage();
 	});
 
-	// 当 Tab 切换到历史时，初始化并加载数据
+	// 当 Tab 切换到历史时，懒加载数据
 	function handleTabChange(value: string) {
 		if (value === 'history' && !adminStore.history.initialized) {
 			adminStore.history.initialized = true;
@@ -51,7 +46,7 @@
 		</Button>
 	</div>
 
-	<!-- 统计卡片 -->
+	<!-- 统计卡片（快照计数，进入页面后固定不变） -->
 	<div class="grid gap-4 md:grid-cols-2">
 		<Card.Root>
 			<Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -59,7 +54,7 @@
 				<Gift class="h-4 w-4 text-muted-foreground" />
 			</Card.Header>
 			<Card.Content>
-				<div class="text-2xl font-bold">{adminStore.codes.total}</div>
+				<div class="text-2xl font-bold">{adminStore.codePageSnapshotCounts.totalCodes}</div>
 				<p class="text-xs text-muted-foreground">已生成兑换码数量</p>
 			</Card.Content>
 		</Card.Root>
@@ -70,7 +65,7 @@
 				<History class="h-4 w-4 text-muted-foreground" />
 			</Card.Header>
 			<Card.Content>
-				<div class="text-2xl font-bold">{adminStore.history.total}</div>
+				<div class="text-2xl font-bold">{adminStore.codePageSnapshotCounts.totalRedemptions}</div>
 				<p class="text-xs text-muted-foreground">总兑换次数</p>
 			</Card.Content>
 		</Card.Root>

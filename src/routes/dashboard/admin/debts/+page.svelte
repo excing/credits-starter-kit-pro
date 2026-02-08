@@ -42,7 +42,7 @@
 				<AlertCircle class="h-4 w-4 text-muted-foreground" />
 			</Card.Header>
 			<Card.Content>
-				<div class="text-2xl font-bold">{adminStore.stats.unsettledDebts}</div>
+				<div class="text-2xl font-bold">{adminStore.debts.items.filter((d) => !d.isSettled).length}</div>
 				<p class="text-xs text-muted-foreground">待处理欠费记录</p>
 			</Card.Content>
 		</Card.Root>
@@ -53,7 +53,7 @@
 				<DollarSign class="h-4 w-4 text-muted-foreground" />
 			</Card.Header>
 			<Card.Content>
-				<div class="text-2xl font-bold">{adminStore.stats.totalDebts}</div>
+				<div class="text-2xl font-bold">{adminStore.debts.items.filter((d) => !d.isSettled).reduce((sum, d) => sum + d.amount, 0)}</div>
 				<p class="text-xs text-muted-foreground">未结清积分总额</p>
 			</Card.Content>
 		</Card.Root>

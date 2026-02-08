@@ -19,7 +19,8 @@
 			href: '/dashboard/admin/packages',
 			icon: Package,
 			stat: () => adminStore.stats.totalPackages,
-			statLabel: '个套餐'
+			statLabel: '个套餐',
+			subStat: null as (() => string) | null
 		},
 		{
 			title: '欠费管理',
@@ -27,7 +28,8 @@
 			href: '/dashboard/admin/debts',
 			icon: ShieldCheck,
 			stat: () => adminStore.stats.unsettledDebts,
-			statLabel: '条未结清'
+			statLabel: '条待处理',
+			subStat: () => `未结清 ${adminStore.stats.unsettledDebtAmount} 积分`
 		},
 		{
 			title: '兑换码管理',
@@ -35,7 +37,8 @@
 			href: '/dashboard/admin/codes',
 			icon: Gift,
 			stat: () => adminStore.stats.totalCodes,
-			statLabel: '个兑换码'
+			statLabel: '个兑换码',
+			subStat: () => `已兑换 ${adminStore.stats.totalRedemptions} 次`
 		}
 	];
 </script>
@@ -92,6 +95,9 @@
 						<span class="text-2xl font-bold">{page.stat()}</span>
 						<span class="text-sm text-muted-foreground">{page.statLabel}</span>
 					</div>
+					{#if page.subStat}
+						<p class="text-xs text-muted-foreground mt-1">{page.subStat()}</p>
+					{/if}
 				</Card.Content>
 			</Card.Root>
 		{/each}
