@@ -20,7 +20,8 @@ export type TransactionType =
     | 'purchase'
     | 'subscription'
     | 'admin_adjustment'
-    | 'refund';
+    | 'refund'
+    | 'debt';
 
 // Re-export OperationCostConfig for backward compatibility
 export type { OperationCostConfig };
@@ -454,11 +455,27 @@ export async function deductCredits(
                 // 如果还有剩余未扣除的金额，在事务内记录欠费
                 // Bug修复：确保扣除积分和记录欠费在同一事务内完成
                 if (remainingAmount > 0) {
-                    await recordDebtInTransaction(tx, userId, remainingAmount, operationType, {
+                    const debtMetadata = {
                         ...metadata,
                         totalRequired: amount,
                         deductedFromBalance: totalDeducted,
                         debtAmount: remainingAmount
+                    };
+
+                    // 记录欠费
+                    await recordDebtInTransaction(tx, userId, remainingAmount, operationType, debtMetadata);
+
+                    // 创建欠费产生的交易记录（修复：之前缺少此记录，导致交易历史中只有"结算欠费"而无"欠费产生"）
+                    await tx.insert(creditTransaction).values({
+                        id: randomUUID(),
+                        userId,
+                        userPackageId: null,
+                        type: 'debt',
+                        amount: -remainingAmount,
+                        balanceBefore: 0,
+                        balanceAfter: 0,
+                        description: `${operationType} 欠费`,
+                        metadata: JSON.stringify(debtMetadata)
                     });
 
                     console.log('积分不足，已扣除可用积分并记录欠费:', {

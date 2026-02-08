@@ -102,6 +102,7 @@
             subscription: { label: "订阅", variant: "default" },
             admin_adjustment: { label: "调整", variant: "outline" },
             refund: { label: "退款", variant: "outline" },
+            debt: { label: "欠费", variant: "destructive" },
         };
         return types[type] || { label: type, variant: "outline" };
     }
