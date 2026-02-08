@@ -742,10 +742,63 @@ class AdminStore {
 	// ============ 初始化 ============
 
 	async init() {
-		await this.loadPackages();
-		this.codes.initialized = true;
-		this.debts.initialized = true;
-		await Promise.all([this.loadCodes(), this.loadDebts(), this.loadOverviewStats()]);
+		// 使用聚合 API 一次性加载所有数据（4个请求 -> 1个请求）
+		this.packagesLoading = true;
+		this.codes.loading = true;
+		this.debts.loading = true;
+		this.overviewLoading = true;
+
+		try {
+			const res = await fetch('/api/admin/credits/overview');
+			if (res.ok) {
+				const data = await res.json();
+				this.packages = data.packages;
+				this.codes.items = data.codes.items;
+				this.codes.total = data.codes.total;
+				this.codes.initialized = true;
+				this.debts.items = data.debts.items;
+				this.debts.total = data.debts.total;
+				this.debts.initialized = true;
+				this.overviewStats = data.stats;
+			} else {
+				toast.error('加载管理数据失败');
+			}
+		} catch (error) {
+			console.error('管理数据初始化失败:', error);
+			toast.error('加载失败');
+		} finally {
+			this.packagesLoading = false;
+			this.codes.loading = false;
+			this.debts.loading = false;
+			this.overviewLoading = false;
+		}
+	}
+
+	/**
+	 * 兑换码页面初始化：聚合加载套餐+兑换码（2个请求 -> 1个请求）
+	 */
+	async initCodesPage() {
+		this.packagesLoading = true;
+		this.codes.loading = true;
+
+		try {
+			const res = await fetch('/api/admin/credits/codes/overview');
+			if (res.ok) {
+				const data = await res.json();
+				this.packages = data.packages;
+				this.codes.items = data.codes.items;
+				this.codes.total = data.codes.total;
+				this.codes.initialized = true;
+			} else {
+				toast.error('加载兑换码数据失败');
+			}
+		} catch (error) {
+			console.error('兑换码页面初始化失败:', error);
+			toast.error('加载失败');
+		} finally {
+			this.packagesLoading = false;
+			this.codes.loading = false;
+		}
 	}
 }
 

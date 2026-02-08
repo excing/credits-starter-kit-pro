@@ -12,12 +12,10 @@
 	import { AdminDialogs, CodeRow } from '$lib/components/admin';
 
 	onMount(() => {
-		// 加载套餐（生成兑换码需要）
-		if (adminStore.packages.length === 0) {
-			adminStore.loadPackages();
-		}
-		// 加载兑换码列表
-		if (!adminStore.codes.initialized) {
+		// 使用聚合 API 一次性加载套餐+兑换码（2个请求 -> 1个请求）
+		if (adminStore.packages.length === 0 || !adminStore.codes.initialized) {
+			adminStore.initCodesPage();
+		} else if (!adminStore.codes.initialized) {
 			adminStore.codes.initialized = true;
 			adminStore.loadCodes();
 		}

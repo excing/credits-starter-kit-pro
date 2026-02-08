@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { authState, statsState, afterCreditsEarned, refreshUserCredits, refreshUserStats } from "$lib/stores/auth";
+    import { authState, statsState, afterCreditsEarned, patchCurrentUser, setStatsData } from "$lib/stores/auth";
     import * as Card from "$lib/components/ui/card";
     import * as Dialog from "$lib/components/ui/dialog";
     import * as Table from "$lib/components/ui/table";
@@ -21,30 +21,25 @@
     let debts = $state<any[]>([]);
     let debtsLoading = $state(true);
 
-    // 加载页面特定数据（交易历史和套餐列表）
+    // 使用聚合 API 加载所有页面数据（5个请求 -> 1个请求）
     async function loadPageData() {
         loading = true;
         try {
-            // 并行获取交易历史、用户套餐和欠费记录
-            const [historyRes, packagesRes, debtsRes] = await Promise.all([
-                fetch("/api/user/credits/history?limit=20"),
-                fetch("/api/user/credits/packages"),
-                fetch("/api/user/credits/debts")
-            ]);
-
-            if (historyRes.ok) {
-                const data = await historyRes.json();
+            const res = await fetch("/api/user/credits/overview");
+            if (res.ok) {
+                const data = await res.json();
                 transactions = data.transactions;
-            }
-
-            if (packagesRes.ok) {
-                const data = await packagesRes.json();
                 packages = data.packages;
-            }
-
-            if (debtsRes.ok) {
-                const data = await debtsRes.json();
                 debts = data.debts;
+                // 同时更新 auth store 中的余额和统计数据
+                patchCurrentUser({
+                    credits: data.balance,
+                    activePackages: data.activePackages
+                });
+                // 更新统计数据到 store（用于显示即将过期等信息）
+                if (data.stats) {
+                    setStatsData(data.stats);
+                }
             }
         } catch (error) {
             console.error("加载数据失败:", error);
@@ -111,10 +106,8 @@
     }
 
     onMount(() => {
+        // 聚合 API 一次性加载所有数据（余额+统计+历史+套餐+欠费）
         loadPageData();
-        // 每次进入页面都刷新积分余额和统计数据
-        refreshUserCredits();
-        refreshUserStats();
     });
 </script>
 

@@ -111,6 +111,16 @@ export function clearAuthState() {
 	setCurrentUser(null);
 }
 
+export function setStatsData(stats: UserStats) {
+	_statsState.update((s) => ({
+		...s,
+		data: stats,
+		loaded: true,
+		loading: false,
+		error: null
+	}));
+}
+
 export async function refreshCurrentUser(): Promise<AuthUser | null> {
 	_authState.update((state) => ({ ...state, loading: true }));
 	try {
@@ -198,17 +208,37 @@ export async function refreshUserStats(): Promise<UserStats | null> {
 
 /**
  * 初始化 Dashboard 完整数据（积分余额 + 统计数据）
- * 首次进入 dashboard 时调用
+ * 首次进入 dashboard 时调用，使用聚合 API 减少请求数
  */
 export async function initDashboardData(): Promise<void> {
 	const state = get(_authState);
 	if (!state.user) return;
 
-	// 并行加载积分余额和统计数据
-	await Promise.all([
-		refreshUserCredits(),
-		refreshUserStats()
-	]);
+	try {
+		const response = await fetch('/api/user/credits/overview');
+		if (response.ok) {
+			const data = await response.json();
+			// 更新余额
+			patchCurrentUser({
+				credits: data.balance,
+				activePackages: data.activePackages
+			});
+			// 更新统计
+			_statsState.update((s) => ({
+				...s,
+				data: data.stats,
+				loaded: true,
+				loading: false
+			}));
+		}
+	} catch (error) {
+		console.error('Failed to init dashboard data:', error);
+		// 降级：回退到分开请求
+		await Promise.all([
+			refreshUserCredits(),
+			refreshUserStats()
+		]);
+	}
 }
 
 /**
