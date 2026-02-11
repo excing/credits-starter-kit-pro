@@ -3,9 +3,10 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-svelte';
-	import { adminStore } from '$lib/stores/admin.svelte';
+	import { ShieldCheck } from '@lucide/svelte';
+	import { adminStore } from '$lib/stores/admin';
 	import DebtRow from './DebtRow.svelte';
+	import Pagination from '$lib/components/common/Pagination.svelte';
 </script>
 
 <Card.Root>
@@ -81,38 +82,13 @@
 
 		<!-- 分页控件 -->
 		{#if adminStore.debts.total > adminStore.debts.limit}
-			{@const pageInfo = adminStore.debts.pageInfo}
-			<div class="flex items-center justify-between mt-4">
-				<div class="text-sm text-muted-foreground">
-					显示 {pageInfo.start} - {pageInfo.end} 条，共 {pageInfo.total} 条
-				</div>
-				<div class="flex gap-2">
-					<Button
-						size="sm"
-						variant="outline"
-						disabled={!adminStore.debts.hasPrev}
-						onclick={() => {
-							adminStore.debts.page--;
-							adminStore.loadDebts();
-						}}
-					>
-						<ChevronLeft class="h-4 w-4" />
-						上一页
-					</Button>
-					<Button
-						size="sm"
-						variant="outline"
-						disabled={!adminStore.debts.hasMore}
-						onclick={() => {
-							adminStore.debts.page++;
-							adminStore.loadDebts();
-						}}
-					>
-						下一页
-						<ChevronRight class="h-4 w-4" />
-					</Button>
-				</div>
-			</div>
+			<Pagination
+				count={adminStore.debts.total}
+				perPage={adminStore.debts.limit}
+				bind:page={adminStore.debts.page}
+				onPageChange={() => adminStore.loadDebts()}
+				class="mt-4"
+			/>
 		{/if}
 	</Card.Content>
 </Card.Root>

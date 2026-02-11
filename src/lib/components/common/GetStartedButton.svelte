@@ -1,9 +1,8 @@
 <script lang="ts">
     import { Button } from "$lib/components/ui/button";
 	    import {
-	        authState,
-	        ensureCurrentUserLoaded,
-	    } from "$lib/stores/auth";
+	        authStore,
+	    } from "$lib/stores/auth.svelte";
     import { goto } from "$app/navigation";
     import type { Snippet } from "svelte";
 
@@ -18,18 +17,18 @@
         onclick?: (e: MouseEvent) => void;
         children?: Snippet;
         class?: string;
-        [key: string]: any;
+        [key: string]: unknown;
     }>();
 
-	    let isAuthenticated = $derived($authState.loaded ? !!$authState.user : null);
+	    let isAuthenticated = $derived(authStore.loaded ? !!authStore.user : null);
 
 	    async function handleClick(e: MouseEvent) {
-	        if (!$authState.loaded) {
+	        if (!authStore.loaded) {
 	            // If the user clicks before layout data initializes, resolve once.
-	            await ensureCurrentUserLoaded();
+	            await authStore.ensureCurrentUserLoaded();
 	        }
 
-	        if (!$authState.user) {
+	        if (!authStore.user) {
             e.preventDefault();
             goto("/sign-in");
             return;

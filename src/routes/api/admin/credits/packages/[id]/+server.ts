@@ -2,20 +2,14 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { creditPackage } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
-import { isAdmin } from '$lib/server/auth-utils';
+import { eq, and, isNull } from 'drizzle-orm';
+import { errorResponse, ValidationError, NotFoundError } from '$lib/server/errors';
 
 // 更新套餐
-export const PUT: RequestHandler = async ({ locals, params, request }) => {
-    const userEmail = locals.session?.user?.email;
-
-    if (!isAdmin(userEmail)) {
-        return json({ error: '需要管理员权限' }, { status: 403 });
-    }
-
+export const PUT: RequestHandler = async ({ params, request }) => {
     const packageId = params.id;
     if (!packageId) {
-        return json({ error: '套餐ID不能为空' }, { status: 400 });
+        return errorResponse(new ValidationError('套餐ID不能为空'));
     }
 
     try {
@@ -33,7 +27,7 @@ export const PUT: RequestHandler = async ({ locals, params, request }) => {
 
         // 验证必填字段
         if (!name || !credits || !validityDays || !packageType) {
-            return json({ error: '请填写所有必填字段' }, { status: 400 });
+            return errorResponse(new ValidationError('请填写所有必填字段'));
         }
 
         // 更新套餐
@@ -50,11 +44,11 @@ export const PUT: RequestHandler = async ({ locals, params, request }) => {
                 isActive: Boolean(isActive),
                 updatedAt: new Date()
             })
-            .where(eq(creditPackage.id, packageId))
+            .where(and(eq(creditPackage.id, packageId), isNull(creditPackage.deletedAt)))
             .returning();
 
         if (!updatedPackage) {
-            return json({ error: '套餐不存在' }, { status: 404 });
+            return errorResponse(new NotFoundError('套餐不存在'));
         }
 
         return json({
@@ -62,33 +56,27 @@ export const PUT: RequestHandler = async ({ locals, params, request }) => {
             package: updatedPackage
         });
     } catch (error) {
-        console.error('更新套餐失败:', error);
-        return json({ error: '更新套餐失败' }, { status: 500 });
+        return errorResponse(error, '更新套餐失败');
     }
 };
 
 // 删除套餐
-export const DELETE: RequestHandler = async ({ locals, params }) => {
-    const userEmail = locals.session?.user?.email;
-
-    if (!isAdmin(userEmail)) {
-        return json({ error: '需要管理员权限' }, { status: 403 });
-    }
-
+export const DELETE: RequestHandler = async ({ params }) => {
     const packageId = params.id;
     if (!packageId) {
-        return json({ error: '套餐ID不能为空' }, { status: 400 });
+        return errorResponse(new ValidationError('套餐ID不能为空'));
     }
 
     try {
-        // 删除套餐
+        // 软删除套餐（标记 deletedAt，保留数据完整性）
         const [deletedPackage] = await db
-            .delete(creditPackage)
-            .where(eq(creditPackage.id, packageId))
+            .update(creditPackage)
+            .set({ deletedAt: new Date() })
+            .where(and(eq(creditPackage.id, packageId), isNull(creditPackage.deletedAt)))
             .returning();
 
         if (!deletedPackage) {
-            return json({ error: '套餐不存在' }, { status: 404 });
+            return errorResponse(new NotFoundError('套餐不存在'));
         }
 
         return json({
@@ -96,7 +84,6 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
             message: '套餐删除成功'
         });
     } catch (error) {
-        console.error('删除套餐失败:', error);
-        return json({ error: '删除套餐失败' }, { status: 500 });
+        return errorResponse(error, '删除套餐失败');
     }
 };

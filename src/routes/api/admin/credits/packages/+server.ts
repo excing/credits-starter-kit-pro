@@ -2,43 +2,22 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { creditPackage } from '$lib/server/db/schema';
-import { isAdmin } from '$lib/server/auth-utils';
 import { getAllPackages } from '$lib/server/credits';
+import { parsePagination } from '$lib/config/constants';
+import { errorResponse, ValidationError } from '$lib/server/errors';
 
-export const GET: RequestHandler = async ({ locals }) => {
-    const userId = locals.session?.user?.id;
-    const userEmail = locals.session?.user?.email;
-
-    if (!userId || !userEmail) {
-        return json({ error: '未授权' }, { status: 401 });
-    }
-
-    if (!isAdmin(userEmail)) {
-        return json({ error: '需要管理员权限' }, { status: 403 });
-    }
-
+export const GET: RequestHandler = async ({ url }) => {
     try {
-        const packages = await getAllPackages();
-        return json({ packages });
+        const { limit, offset } = parsePagination(url);
+        const { packages, total } = await getAllPackages(limit, offset);
+        return json({ packages, total, limit, offset });
     } catch (error) {
-        console.error('获取套餐列表失败:', error);
-        return json({ error: '获取失败' }, { status: 500 });
+        return errorResponse(error, '获取失败');
     }
 };
 
 // 创建套餐
-export const POST: RequestHandler = async ({ locals, request }) => {
-    const userId = locals.session?.user?.id;
-    const userEmail = locals.session?.user?.email;
-
-    if (!userId || !userEmail) {
-        return json({ error: '未授权' }, { status: 401 });
-    }
-
-    if (!isAdmin(userEmail)) {
-        return json({ error: '需要管理员权限' }, { status: 403 });
-    }
-
+export const POST: RequestHandler = async ({ request }) => {
     try {
         const body = await request.json();
         const {
@@ -54,7 +33,12 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 
         // 验证必填字段
         if (!name || !credits || !validityDays || !packageType) {
-            return json({ error: '请填写所有必填字段' }, { status: 400 });
+            return errorResponse(new ValidationError('请填写所有必填字段'));
+        }
+
+        // 验证 packageType 只包含安全字符（字母、数字、下划线、连字符）
+        if (!/^[a-zA-Z0-9_-]+$/.test(packageType)) {
+            return errorResponse(new ValidationError('套餐类型只能包含字母、数字、下划线和连字符'));
         }
 
         // 生成套餐ID
@@ -82,7 +66,6 @@ export const POST: RequestHandler = async ({ locals, request }) => {
             package: newPackage
         });
     } catch (error) {
-        console.error('创建套餐失败:', error);
-        return json({ error: '创建套餐失败' }, { status: 500 });
+        return errorResponse(error, '创建套餐失败');
     }
 };

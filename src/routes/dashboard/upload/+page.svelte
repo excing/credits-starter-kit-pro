@@ -3,8 +3,9 @@
     import * as Card from "$lib/components/ui/card";
     import { Input } from "$lib/components/ui/input";
     import { Progress } from "$lib/components/ui/progress";
-    import { Check, FileImage, Upload, X } from "lucide-svelte";
+    import { Check, FileImage, Upload, X } from "@lucide/svelte";
     import { toast } from "svelte-sonner";
+    import { UPLOAD } from "$lib/config/constants";
 
     interface UploadedFile {
         id: string;
@@ -29,8 +30,8 @@
                 continue;
             }
 
-            if (file.size > 5 * 1024 * 1024) {
-                toast.error(`${file.name} is too large (max 5MB)`);
+            if (file.size > UPLOAD.CLIENT_MAX_SIZE_BYTES) {
+                toast.error(`${file.name} is too large (max ${UPLOAD.CLIENT_MAX_SIZE_MB}MB)`);
                 continue;
             }
 
@@ -45,7 +46,7 @@
                 const progressInterval = setInterval(() => {
                     uploadProgress = Math.min(
                         uploadProgress + Math.random() * 20,
-                        90,
+                        UPLOAD.PROGRESS_SIMULATION_MAX,
                     );
                 }, 200);
 
@@ -141,7 +142,7 @@
                     Upload Images
                 </Card.Title>
                 <Card.Description>
-                    Upload images to Cloudflare R2. Maximum file size is 5MB.
+                    Upload images to Cloudflare R2. Maximum file size is {UPLOAD.CLIENT_MAX_SIZE_MB}MB.
                 </Card.Description>
             </Card.Header>
             <Card.Content class="space-y-4">
@@ -177,7 +178,7 @@
                                     : "Click to upload or drag and drop"}
                             </p>
                             <p class="text-muted-foreground text-xs">
-                                PNG, JPG, GIF up to 5MB
+                                PNG, JPG, GIF up to {UPLOAD.CLIENT_MAX_SIZE_MB}MB
                             </p>
                         </div>
                     </div>

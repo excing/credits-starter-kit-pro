@@ -3,7 +3,7 @@
     import ChartInteractive from "$lib/components/dashboard/ChartInteractive.svelte";
     import * as Card from "$lib/components/ui/card";
     import { Button } from "$lib/components/ui/button";
-    import { ShieldCheck, Gift } from "lucide-svelte";
+    import { ShieldCheck, Gift } from "@lucide/svelte";
     import { goto } from "$app/navigation";
 
     let { data } = $props();
@@ -13,11 +13,10 @@
     <div class="w-full">
         <div class="flex flex-col items-start justify-center gap-2">
             <h1 class="text-3xl font-semibold tracking-tight">
-                Interactive Chart
+                控制台概览
             </h1>
             <p class="text-muted-foreground">
-                Interactive chart with data visualization and interactive
-                elements.
+                数据概览与积分消费统计
             </p>
         </div>
         <div class="@container/main flex flex-1 flex-col gap-2">

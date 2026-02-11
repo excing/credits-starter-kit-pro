@@ -7,9 +7,11 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Gift, History, Copy, ChevronLeft, ChevronRight, ArrowLeft, Plus, Filter } from 'lucide-svelte';
-	import { adminStore } from '$lib/stores/admin.svelte';
+	import { Gift, History, Copy, ArrowLeft, Plus, Filter } from '@lucide/svelte';
+	import * as Select from '$lib/components/ui/select';
+	import { adminStore } from '$lib/stores/admin';
 	import { AdminDialogs, CodeRow } from '$lib/components/admin';
+	import Pagination from '$lib/components/common/Pagination.svelte';
 
 	onMount(() => {
 		// 每次进入/返回页面都重新加载数据，确保最新
@@ -159,21 +161,29 @@
 						{#if adminStore.packages.length > 0}
 							<div class="flex items-center gap-2">
 								<Filter class="h-4 w-4 text-muted-foreground shrink-0" />
-								<select
+								<Select.Root
+									type="single"
 									value={adminStore.codePackageFilter}
-									onchange={(e) => {
-										adminStore.setCodePackageFilter(e.currentTarget.value);
+									onValueChange={(v) => {
+										adminStore.setCodePackageFilter(v);
 										adminStore.loadCodes();
 									}}
-									class="flex h-8 w-full sm:w-auto items-center rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 								>
-									<option value="">全部套餐</option>
-									{#each adminStore.packages as pkg}
-										<option value={pkg.id}>
-											{pkg.name} ({pkg.credits}积分)
-										</option>
-									{/each}
-								</select>
+									<Select.Trigger size="sm" class="w-full sm:w-auto">
+										{#if adminStore.codePackageFilter}
+											{@const selected = adminStore.packages.find(p => p.id === adminStore.codePackageFilter)}
+											{selected ? `${selected.name} (${selected.credits}积分)` : '全部套餐'}
+										{:else}
+											全部套餐
+										{/if}
+									</Select.Trigger>
+									<Select.Content>
+										<Select.Item value="" label="全部套餐" />
+										{#each adminStore.packages as pkg}
+											<Select.Item value={pkg.id} label="{pkg.name} ({pkg.credits}积分)" />
+										{/each}
+									</Select.Content>
+								</Select.Root>
 							</div>
 						{/if}
 					</div>
@@ -230,38 +240,12 @@
 
 							<!-- 分页控件 -->
 							{#if adminStore.codes.total > adminStore.codes.limit}
-								{@const pageInfo = adminStore.codes.pageInfo}
-								<div class="flex items-center justify-between">
-									<div class="text-sm text-muted-foreground">
-										显示 {pageInfo.start} - {pageInfo.end} 条，共 {pageInfo.total} 条
-									</div>
-									<div class="flex gap-2">
-										<Button
-											size="sm"
-											variant="outline"
-											disabled={!adminStore.codes.hasPrev}
-											onclick={() => {
-												adminStore.codes.page--;
-												adminStore.loadCodes();
-											}}
-										>
-											<ChevronLeft class="h-4 w-4" />
-											上一页
-										</Button>
-										<Button
-											size="sm"
-											variant="outline"
-											disabled={!adminStore.codes.hasMore}
-											onclick={() => {
-												adminStore.codes.page++;
-												adminStore.loadCodes();
-											}}
-										>
-											下一页
-											<ChevronRight class="h-4 w-4" />
-										</Button>
-									</div>
-								</div>
+								<Pagination
+									count={adminStore.codes.total}
+									perPage={adminStore.codes.limit}
+									bind:page={adminStore.codes.page}
+									onPageChange={() => adminStore.loadCodes()}
+								/>
 							{/if}
 						</div>
 					{/if}
@@ -345,38 +329,12 @@
 
 							<!-- 分页控件 -->
 							{#if adminStore.history.total > adminStore.history.limit}
-								{@const pageInfo = adminStore.history.pageInfo}
-								<div class="flex items-center justify-between">
-									<div class="text-sm text-muted-foreground">
-										显示 {pageInfo.start} - {pageInfo.end} 条，共 {pageInfo.total} 条
-									</div>
-									<div class="flex gap-2">
-										<Button
-											size="sm"
-											variant="outline"
-											disabled={!adminStore.history.hasPrev}
-											onclick={() => {
-												adminStore.history.page--;
-												adminStore.loadHistory();
-											}}
-										>
-											<ChevronLeft class="h-4 w-4" />
-											上一页
-										</Button>
-										<Button
-											size="sm"
-											variant="outline"
-											disabled={!adminStore.history.hasMore}
-											onclick={() => {
-												adminStore.history.page++;
-												adminStore.loadHistory();
-											}}
-										>
-											下一页
-											<ChevronRight class="h-4 w-4" />
-										</Button>
-									</div>
-								</div>
+								<Pagination
+									count={adminStore.history.total}
+									perPage={adminStore.history.limit}
+									bind:page={adminStore.history.page}
+									onPageChange={() => adminStore.loadHistory()}
+								/>
 							{/if}
 						</div>
 					{/if}

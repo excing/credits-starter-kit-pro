@@ -1,15 +1,15 @@
 <script lang="ts">
     import Sidebar from "$lib/components/dashboard/Sidebar.svelte";
     import Navbar from "$lib/components/dashboard/Navbar.svelte";
-    import { initDashboardData, authState } from "$lib/stores/auth";
+    import { authStore } from "$lib/stores/auth.svelte";
 
     let { children } = $props();
     let dataInitialized = $state(false);
 
     // 响应式初始化：当用户已登录且数据未初始化时，自动加载完整数据
     $effect(() => {
-        if ($authState.loaded && $authState.user && !dataInitialized) {
-            initDashboardData();
+        if (authStore.loaded && authStore.user && !dataInitialized) {
+            authStore.initDashboardData();
             dataInitialized = true;
         }
     });

@@ -6,12 +6,9 @@
     import { Label } from "$lib/components/ui/label";
 	import { Skeleton } from "$lib/components/ui/skeleton";
 	import { authClient } from "$lib/auth-client";
-	import { Settings2 } from "lucide-svelte";
+	import { Settings2 } from "@lucide/svelte";
     import { toast } from "svelte-sonner";
-    import {
-        authState,
-        patchCurrentUser,
-    } from "$lib/stores/auth";
+    import { authStore } from "$lib/stores/auth.svelte";
 
     interface User {
         id: string;
@@ -20,8 +17,8 @@
         image?: string | null;
     }
 
-    let user = $derived($authState.user as User | null);
-    let loading = $derived(!$authState.loaded);
+    let user = $derived(authStore.user as User | null);
+    let loading = $derived(!authStore.loaded);
     // Profile form states
     let name = $state("");
     let email = $state("");
@@ -32,10 +29,10 @@
     let uploadingImage = $state(false);
 
     $effect(() => {
-        if (!$authState.loaded || didInitForm) return;
-        if ($authState.user) {
-            name = ($authState.user as any)?.name || "";
-            email = ($authState.user as any)?.email || "";
+        if (!authStore.loaded || didInitForm) return;
+        if (authStore.user) {
+            name = authStore.user?.name || "";
+            email = authStore.user?.email || "";
             didInitForm = true;
         }
     });
@@ -43,7 +40,7 @@
     async function handleUpdateProfile() {
         try {
             await authClient.updateUser({ name });
-            patchCurrentUser({ name });
+            authStore.patchCurrentUser({ name });
             toast.success("Profile updated successfully");
         } catch {
             toast.error("Failed to update profile");

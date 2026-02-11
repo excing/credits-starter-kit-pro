@@ -5,8 +5,8 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Package, Plus, ArrowLeft } from 'lucide-svelte';
-	import { adminStore } from '$lib/stores/admin.svelte';
+	import { Package, Plus, ArrowLeft } from '@lucide/svelte';
+	import { adminStore } from '$lib/stores/admin';
 	import { AdminDialogs, PackageRow } from '$lib/components/admin';
 
 	onMount(() => {

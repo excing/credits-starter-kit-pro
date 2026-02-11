@@ -13,29 +13,32 @@ import type { RequestHandler } from './$types';
 import {
 	getUserActivePackages,
 	getUserCreditStats,
+	getUserMonthlySpending,
 	calcBalanceFromPackages
 } from '$lib/server/credits';
+import { errorResponse, UnauthorizedError } from '$lib/server/errors';
 
 export const GET: RequestHandler = async ({ locals }) => {
 	const userId = locals.session?.user?.id;
 
 	if (!userId) {
-		return json({ error: '未授权' }, { status: 401 });
+		return errorResponse(new UnauthorizedError());
 	}
 
 	try {
-		const [activePackages, stats] = await Promise.all([
+		const [activePackages, stats, monthlySpending] = await Promise.all([
 			getUserActivePackages(userId),
-			getUserCreditStats(userId)
+			getUserCreditStats(userId),
+			getUserMonthlySpending(userId)
 		]);
 
 		return json({
 			balance: calcBalanceFromPackages(activePackages),
 			activePackages: activePackages.length,
-			stats
+			stats,
+			monthlySpending
 		});
 	} catch (error) {
-		console.error('获取 Dashboard 统计失败:', error);
-		return json({ error: '获取统计失败' }, { status: 500 });
+		return errorResponse(error, '获取统计失败');
 	}
 };

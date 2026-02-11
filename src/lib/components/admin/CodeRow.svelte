@@ -2,8 +2,8 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Copy, Trash2, Loader2 } from 'lucide-svelte';
-	import { adminStore, type RedemptionCode } from '$lib/stores/admin.svelte';
+	import { Copy, Trash2, Loader2 } from '@lucide/svelte';
+	import { adminStore, type RedemptionCode } from '$lib/stores/admin';
 
 	interface Props {
 		code: RedemptionCode;

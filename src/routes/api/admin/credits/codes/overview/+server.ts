@@ -14,30 +14,29 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getAllPackages, getRedemptionCodes, getCodePageCounts } from '$lib/server/credits';
 import { isAdmin } from '$lib/server/auth-utils';
-
-const CODES_LIMIT = 10;
+import { PAGINATION, REDEMPTION_CODE_STATUS } from '$lib/config/constants';
+import { errorResponse, ForbiddenError } from '$lib/server/errors';
 
 export const GET: RequestHandler = async ({ locals }) => {
 	const userEmail = locals.session?.user?.email;
 
 	if (!isAdmin(userEmail)) {
-		return json({ error: '需要管理员权限' }, { status: 403 });
+		return errorResponse(new ForbiddenError());
 	}
 
 	try {
-		const [packages, codesResult, snapshotCounts] = await Promise.all([
+		const [packagesResult, codesResult, snapshotCounts] = await Promise.all([
 			getAllPackages(),
-			getRedemptionCodes(CODES_LIMIT, 0, { status: 'active' }),
+			getRedemptionCodes(PAGINATION.DEFAULT_LIMIT, 0, { status: REDEMPTION_CODE_STATUS.ACTIVE }),
 			getCodePageCounts()
 		]);
 
 		return json({
-			packages,
+			packages: packagesResult.packages,
 			codes: { items: codesResult.codes, total: codesResult.total },
 			snapshotCounts
 		});
 	} catch (error) {
-		console.error('获取兑换码概览失败:', error);
-		return json({ error: '获取概览失败' }, { status: 500 });
+		return errorResponse(error, '获取概览失败');
 	}
 };

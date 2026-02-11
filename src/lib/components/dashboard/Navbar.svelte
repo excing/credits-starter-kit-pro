@@ -12,8 +12,8 @@
         Menu,
         Coins,
         ShieldCheck,
-    } from "lucide-svelte";
-    import { authState } from "$lib/stores/auth";
+    } from "@lucide/svelte";
+    import { authStore } from "$lib/stores/auth.svelte";
     import { page } from "$app/stores";
 
     import type { Snippet } from "svelte";
@@ -108,10 +108,10 @@
                 class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
             >
                 <Coins class="h-4 w-4 text-primary" />
-                {#if !$authState.loaded}
+                {#if !authStore.loaded}
                     <Skeleton class="h-4 w-8" />
                 {:else}
-                    <span class="text-sm font-medium">{$authState.user?.credits ?? 0}</span>
+                    <span class="text-sm font-medium">{authStore.user?.credits ?? 0}</span>
                 {/if}
             </a>
             <UserProfile mini={true} />

@@ -5,11 +5,12 @@
     import { toast } from "svelte-sonner";
     import { page } from "$app/stores";
     import { onDestroy } from "svelte";
-    import { Loader2, Mail } from "lucide-svelte";
+    import { Loader2, Mail } from "@lucide/svelte";
     import {
         recordVerificationEmailSent,
         getRemainingWaitTime,
     } from "$lib/utils/verification";
+    import { AUTH } from "$lib/config/constants";
 
     let email = $state("");
     let loading = $state(false);
@@ -85,7 +86,7 @@
                                 context.response.headers.get("X-Retry-After");
                             const retrySeconds = retryAfter
                                 ? parseInt(retryAfter, 10)
-                                : 90;
+                                : AUTH.EMAIL_VERIFICATION_WINDOW;
                             remainingSeconds = retrySeconds;
                             startCountdown();
                             toast.error(
@@ -99,8 +100,8 @@
             // 记录发送时间
             recordVerificationEmailSent(email);
 
-            // 开始 90 秒倒计时
-            remainingSeconds = 90;
+            // 开始倒计时
+            remainingSeconds = AUTH.EMAIL_VERIFICATION_WINDOW;
             startCountdown();
 
             toast.success("验证邮件已重新发送，请查收邮箱");

@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { authState, statsState, patchCurrentUser, setStatsData } from "$lib/stores/auth";
+    import { authStore } from "$lib/stores/auth.svelte";
     import * as Card from "$lib/components/ui/card";
     import * as Dialog from "$lib/components/ui/dialog";
     import * as Table from "$lib/components/ui/table";
@@ -9,19 +9,30 @@
     import { Label } from "$lib/components/ui/label";
     import { Badge } from "$lib/components/ui/badge";
     import { Skeleton } from "$lib/components/ui/skeleton";
-    import { Coins, Gift, History, AlertCircle, AlertTriangle, TrendingUp, TrendingDown, Clock, ChevronDown, Package, Archive } from "lucide-svelte";
+    import { Coins, Gift, History, AlertCircle, AlertTriangle, TrendingUp, TrendingDown, Clock, ChevronDown, Package, Archive } from "@lucide/svelte";
     import { toast } from "svelte-sonner";
+    import { PAGINATION, TRANSACTION_TYPE } from "$lib/config/constants";
+    import Pagination from "$lib/components/common/Pagination.svelte";
+    import type { UserTransaction, UserPackage, UserDebt } from "$lib/types/credits";
+    import type { BadgeVariant } from "$lib/components/ui/badge";
 
     let loading = $state(true);
     let redeeming = $state(false);
     let redeemDialogOpen = $state(false);
     let redeemCode = $state("");
-    let transactions = $state<any[]>([]);
-    let packages = $state<any[]>([]);
-    let inactivePackages = $state<any[]>([]);
+    let transactions = $state<UserTransaction[]>([]);
+    let transactionsTotal = $state(0);
+    let transactionsPage = $state(1);
+    let transactionsLoading = $state(false);
+    const transactionsLimit = PAGINATION.DEFAULT_LIMIT;
+    let packages = $state<UserPackage[]>([]);
+    let inactivePackages = $state<UserPackage[]>([]);
     let inactiveExpanded = $state(false);
-    let debts = $state<any[]>([]);
+    let debts = $state<UserDebt[]>([]);
     let debtsLoading = $state(true);
+
+    // 交易历史分页计算属性
+    let transactionsOffset = $derived((transactionsPage - 1) * transactionsLimit);
 
     // 使用聚合 API 加载所有页面数据（5个请求 -> 1个请求）
     async function loadPageData() {
@@ -31,17 +42,19 @@
             if (res.ok) {
                 const data = await res.json();
                 transactions = data.transactions;
+                transactionsTotal = data.transactionsTotal ?? data.transactions.length;
+                transactionsPage = 1;
                 packages = data.packages;
                 inactivePackages = data.inactivePackages || [];
                 debts = data.debts;
                 // 同时更新 auth store 中的余额和统计数据
-                patchCurrentUser({
+                authStore.patchCurrentUser({
                     credits: data.balance,
                     activePackages: data.activePackages
                 });
                 // 更新统计数据到 store（用于显示即将过期等信息）
                 if (data.stats) {
-                    setStatsData(data.stats);
+                    authStore.setStatsData(data.stats);
                 }
             }
         } catch (error) {
@@ -87,28 +100,52 @@
         }
     }
 
+    // 加载交易历史分页
+    async function loadTransactionsPage() {
+        transactionsLoading = true;
+        try {
+            const params = new URLSearchParams({
+                limit: transactionsLimit.toString(),
+                offset: transactionsOffset.toString()
+            });
+            const res = await fetch(`/api/user/credits/history?${params}`);
+            if (res.ok) {
+                const data = await res.json();
+                transactions = data.transactions;
+                transactionsTotal = data.total;
+            } else {
+                toast.error("加载交易记录失败");
+            }
+        } catch (error) {
+            console.error("加载交易记录失败:", error);
+            toast.error("加载失败");
+        } finally {
+            transactionsLoading = false;
+        }
+    }
+
     // 格式化日期
-    function formatDate(date: string) {
+    function formatDate(date: string): string {
         return new Date(date).toLocaleString("zh-CN");
     }
 
     // 获取交易类型标签
     function getTransactionTypeBadge(type: string) {
-        const types: Record<string, { label: string; variant: any }> = {
-            redemption: { label: "兑换", variant: "default" },
-            chat_usage: { label: "聊天", variant: "secondary" },
-            image_generation: { label: "生图", variant: "secondary" },
-            purchase: { label: "购买", variant: "default" },
-            subscription: { label: "订阅", variant: "default" },
-            admin_adjustment: { label: "调整", variant: "outline" },
-            refund: { label: "退款", variant: "outline" },
-            debt: { label: "欠费", variant: "destructive" },
+        const types: Record<string, { label: string; variant: BadgeVariant }> = {
+            [TRANSACTION_TYPE.REDEMPTION]: { label: "兑换", variant: "default" },
+            [TRANSACTION_TYPE.CHAT_USAGE]: { label: "聊天", variant: "secondary" },
+            [TRANSACTION_TYPE.IMAGE_GENERATION]: { label: "生图", variant: "secondary" },
+            [TRANSACTION_TYPE.PURCHASE]: { label: "购买", variant: "default" },
+            [TRANSACTION_TYPE.SUBSCRIPTION]: { label: "订阅", variant: "default" },
+            [TRANSACTION_TYPE.ADMIN_ADJUSTMENT]: { label: "调整", variant: "outline" },
+            [TRANSACTION_TYPE.REFUND]: { label: "退款", variant: "outline" },
+            [TRANSACTION_TYPE.DEBT]: { label: "欠费", variant: "destructive" },
         };
         return types[type] || { label: type, variant: "outline" };
     }
 
     // 获取失效套餐的状态
-    function getInactiveStatus(pkg: any): { label: string; color: string } {
+    function getInactiveStatus(pkg: UserPackage): { label: string; color: string } {
         const now = new Date();
         if (new Date(pkg.expiresAt) <= now) {
             return { label: "已过期", color: "text-orange-600 dark:text-orange-400" };
@@ -158,33 +195,33 @@
                 {:else}
                     <div class="flex items-baseline gap-2">
                         <span class="text-5xl font-extrabold tracking-tight text-primary sm:text-6xl">
-                            {$authState.user?.credits ?? 0}
+                            {authStore.user?.credits ?? 0}
                         </span>
                         <span class="text-lg text-muted-foreground">积分</span>
                     </div>
                     <div class="flex items-center gap-1.5 text-sm text-muted-foreground">
                         <Package class="h-3.5 w-3.5" />
-                        <span>来自 {$authState.user?.activePackages ?? 0} 个有效套餐</span>
+                        <span>来自 {authStore.user?.activePackages ?? 0} 个有效套餐</span>
                     </div>
                 {/if}
 
                 <!-- 统计摘要 -->
-                {#if !loading && $statsState.data && !$statsState.loading}
+                {#if !loading && authStore.stats && !authStore.statsLoading}
                     <div class="flex flex-wrap items-center gap-4 pt-4 border-t border-border/50">
                         <div class="flex items-center gap-1.5">
                             <TrendingUp class="h-3.5 w-3.5 text-green-600" />
-                            <span class="text-sm font-medium text-green-600">+{$statsState.data.totalEarned}</span>
+                            <span class="text-sm font-medium text-green-600">+{authStore.stats.totalEarned}</span>
                             <span class="text-xs text-muted-foreground">总获得</span>
                         </div>
                         <div class="flex items-center gap-1.5">
                             <TrendingDown class="h-3.5 w-3.5 text-red-600" />
-                            <span class="text-sm font-medium text-red-600">-{$statsState.data.totalSpent}</span>
+                            <span class="text-sm font-medium text-red-600">-{authStore.stats.totalSpent}</span>
                             <span class="text-xs text-muted-foreground">总消费</span>
                         </div>
-                        {#if $statsState.data.totalExpired > 0}
+                        {#if authStore.stats.totalExpired > 0}
                             <div class="flex items-center gap-1.5">
                                 <Clock class="h-3.5 w-3.5 text-orange-600" />
-                                <span class="text-sm font-medium text-orange-600">{$statsState.data.totalExpired}</span>
+                                <span class="text-sm font-medium text-orange-600">{authStore.stats.totalExpired}</span>
                                 <span class="text-xs text-muted-foreground">已过期</span>
                             </div>
                         {/if}
@@ -238,7 +275,7 @@
                 </div>
             </Card.Content>
         </Card.Root>
-    {:else if $statsState.data && $statsState.data.expiringPackages.length > 0}
+    {:else if authStore.stats && authStore.stats.expiringPackages.length > 0}
         <Card.Root class="border-orange-200 bg-orange-50 dark:bg-orange-900/10">
             <Card.Header>
                 <Card.Title class="flex items-center gap-2 text-orange-800 dark:text-orange-400">
@@ -249,7 +286,7 @@
             </Card.Header>
             <Card.Content>
                 <div class="space-y-2">
-                    {#each $statsState.data.expiringPackages as pkg}
+                    {#each authStore.stats.expiringPackages as pkg}
                         <div class="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded">
                             <div>
                                 <p class="text-sm font-medium">
@@ -451,10 +488,16 @@
                 <History class="h-5 w-5" />
                 交易历史
             </Card.Title>
-            <Card.Description>最近 20 条交易记录</Card.Description>
+            <Card.Description>
+                {#if transactionsTotal > 0}
+                    共 {transactionsTotal} 条交易记录
+                {:else}
+                    查看所有交易记录
+                {/if}
+            </Card.Description>
         </Card.Header>
         <Card.Content>
-            {#if loading}
+            {#if loading || transactionsLoading}
                 <div class="space-y-2">
                     <Skeleton class="h-12 w-full" />
                     <Skeleton class="h-12 w-full" />
@@ -465,6 +508,7 @@
                     暂无交易记录
                 </p>
             {:else}
+                <div class="space-y-4">
                 <div class="overflow-x-auto -mx-6">
                     <div class="min-w-[500px] px-6">
                         <Table.Root>
@@ -507,6 +551,17 @@
                     </Table.Body>
                         </Table.Root>
                     </div>
+                </div>
+
+                <!-- 分页控件 -->
+                {#if transactionsTotal > transactionsLimit}
+                    <Pagination
+                        count={transactionsTotal}
+                        perPage={transactionsLimit}
+                        bind:page={transactionsPage}
+                        onPageChange={() => loadTransactionsPage()}
+                    />
+                {/if}
                 </div>
             {/if}
         </Card.Content>

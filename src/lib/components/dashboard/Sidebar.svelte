@@ -2,6 +2,7 @@
     import { page } from "$app/stores";
     import { goto } from "$app/navigation";
     import { cn } from "$lib/utils";
+    import { Button } from "$lib/components/ui/button";
     import { Skeleton } from "$lib/components/ui/skeleton";
     import UserProfile from "$lib/components/UserProfile.svelte";
     import {
@@ -15,8 +16,8 @@
         Gift,
         ChevronDown,
         ChevronRight,
-    } from "lucide-svelte";
-    import { authState } from "$lib/stores/auth";
+    } from "@lucide/svelte";
+    import { authStore } from "$lib/stores/auth.svelte";
 
     interface NavItem {
         label: string;
@@ -103,10 +104,11 @@
         >
             <div class="w-full space-y-1 p-4">
                 {#each navItems as item}
-                    <button
+                    <Button
+                        variant="ghost"
                         onclick={() => goto(item.href)}
                         class={cn(
-                            "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:cursor-pointer",
+                            "flex w-full justify-start items-center gap-2 px-3 py-2 text-sm font-medium",
                             pathname === item.href
                                 ? "bg-primary/10 text-primary hover:bg-primary/20"
                                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -114,7 +116,7 @@
                     >
                         <item.icon class="h-4 w-4" />
                         {item.label}
-                    </button>
+                    </Button>
                 {/each}
 
                 <!-- 管理员入口 -->
@@ -128,33 +130,37 @@
                                     : "text-muted-foreground",
                             )}
                         >
-                            <button
+                            <Button
+                                variant="ghost"
+                                class="h-auto p-0 hover:bg-transparent"
                                 onclick={() => goto("/dashboard/admin")}
-                                class="flex items-center gap-2 hover:text-foreground transition-colors"
                             >
                                 <ShieldCheck class="h-4 w-4" />
                                 Admin
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                class="h-5 w-5"
                                 onclick={() => adminExpanded = !adminExpanded}
-                                class="p-0.5 hover:bg-muted rounded transition-colors"
                             >
                                 {#if adminExpanded}
                                     <ChevronDown class="h-4 w-4" />
                                 {:else}
                                     <ChevronRight class="h-4 w-4" />
                                 {/if}
-                            </button>
+                            </Button>
                         </div>
 
                         <!-- 子菜单 -->
                         {#if adminExpanded}
                             <div class="ml-4 space-y-1 border-l pl-2">
                                 {#each adminSubItems as item}
-                                    <button
+                                    <Button
+                                        variant="ghost"
                                         onclick={() => goto(item.href)}
                                         class={cn(
-                                            "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors hover:cursor-pointer",
+                                            "flex w-full justify-start items-center gap-2 px-3 py-1.5 text-sm h-auto",
                                             pathname === item.href
                                                 ? "bg-primary/10 text-primary hover:bg-primary/20 font-medium"
                                                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -162,7 +168,7 @@
                                     >
                                         <item.icon class="h-3.5 w-3.5" />
                                         {item.label}
-                                    </button>
+                                    </Button>
                                 {/each}
                             </div>
                         {/if}
@@ -182,19 +188,20 @@
                             <span class="text-sm font-medium">积分余额</span>
                         </div>
                         <span class="text-sm font-bold text-primary">
-                            {#if !$authState.loaded}
+                            {#if !authStore.loaded}
                                 <Skeleton class="h-4 w-8 inline-block" />
                             {:else}
-                                {$authState.user?.credits ?? 0}
+                                {authStore.user?.credits ?? 0}
                             {/if}
                         </span>
                     </a>
                 </div>
                 <div class="px-4">
-                    <button
+                    <Button
+                        variant="ghost"
                         onclick={() => goto("/dashboard/settings")}
                         class={cn(
-                            "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:cursor-pointer",
+                            "flex w-full justify-start items-center gap-2 px-3 py-2 text-sm font-medium",
                             pathname === "/dashboard/settings"
                                 ? "bg-primary/10 text-primary hover:bg-primary/20"
                                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -202,7 +209,7 @@
                     >
                         <Settings class="h-4 w-4" />
                         Settings
-                    </button>
+                    </Button>
                 </div>
                 <UserProfile />
             </div>

@@ -2,37 +2,31 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { redemptionCode } from '$lib/server/db/schema';
-import { isAdmin } from '$lib/server/auth-utils';
-import { eq } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
+import { errorResponse, ValidationError, NotFoundError } from '$lib/server/errors';
 
 // 更新兑换码状态（启用/禁用）
-export const PATCH: RequestHandler = async ({ locals, params, request }) => {
-	const userEmail = locals.session?.user?.email;
-
-	if (!isAdmin(userEmail)) {
-		return json({ error: '需要管理员权限' }, { status: 403 });
-	}
-
+export const PATCH: RequestHandler = async ({ params, request }) => {
 	const codeId = params.id;
 	if (!codeId) {
-		return json({ error: '兑换码ID不能为空' }, { status: 400 });
+		return errorResponse(new ValidationError('兑换码ID不能为空'));
 	}
 
 	try {
 		const { isActive } = await request.json();
 
 		if (typeof isActive !== 'boolean') {
-			return json({ error: '无效的状态值' }, { status: 400 });
+			return errorResponse(new ValidationError('无效的状态值'));
 		}
 
 		const [updatedCode] = await db
 			.update(redemptionCode)
 			.set({ isActive })
-			.where(eq(redemptionCode.id, codeId))
+			.where(and(eq(redemptionCode.id, codeId), isNull(redemptionCode.deletedAt)))
 			.returning();
 
 		if (!updatedCode) {
-			return json({ error: '兑换码不存在' }, { status: 404 });
+			return errorResponse(new NotFoundError('兑换码不存在'));
 		}
 
 		return json({
@@ -40,32 +34,26 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
 			code: updatedCode
 		});
 	} catch (error) {
-		console.error('更新兑换码失败:', error);
-		return json({ error: '更新失败' }, { status: 500 });
+		return errorResponse(error, '更新失败');
 	}
 };
 
-// 删除兑换码
-export const DELETE: RequestHandler = async ({ locals, params }) => {
-	const userEmail = locals.session?.user?.email;
-
-	if (!isAdmin(userEmail)) {
-		return json({ error: '需要管理员权限' }, { status: 403 });
-	}
-
+// 删除兑换码（软删除）
+export const DELETE: RequestHandler = async ({ params }) => {
 	const codeId = params.id;
 	if (!codeId) {
-		return json({ error: '兑换码ID不能为空' }, { status: 400 });
+		return errorResponse(new ValidationError('兑换码ID不能为空'));
 	}
 
 	try {
 		const [deletedCode] = await db
-			.delete(redemptionCode)
-			.where(eq(redemptionCode.id, codeId))
+			.update(redemptionCode)
+			.set({ deletedAt: new Date() })
+			.where(and(eq(redemptionCode.id, codeId), isNull(redemptionCode.deletedAt)))
 			.returning();
 
 		if (!deletedCode) {
-			return json({ error: '兑换码不存在' }, { status: 404 });
+			return errorResponse(new NotFoundError('兑换码不存在'));
 		}
 
 		return json({
@@ -73,7 +61,6 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
 			message: '兑换码删除成功'
 		});
 	} catch (error) {
-		console.error('删除兑换码失败:', error);
-		return json({ error: '删除失败' }, { status: 500 });
+		return errorResponse(error, '删除失败');
 	}
 };

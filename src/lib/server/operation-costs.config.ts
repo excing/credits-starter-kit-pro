@@ -22,11 +22,15 @@
  * - 统一的计费模型，简化代码逻辑
  */
 
+import { createLogger } from './logger';
+
+const log = createLogger('operation-costs');
+
 export interface OperationCostConfig {
     readonly costAmount: number;
     readonly costPer: number;
     readonly isActive: boolean;
-    readonly metadata?: Readonly<Record<string, any>>;
+    readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -160,7 +164,7 @@ export function isOperationActive(operationType: string): boolean {
  */
 export function getOperationMetadata(
     operationType: string
-): Record<string, any> | undefined {
+): Record<string, unknown> | undefined {
     return OPERATION_COSTS[operationType as OperationType]?.metadata;
 }
 
@@ -212,7 +216,7 @@ export function calculateCost(amount: number, operationType: string): number {
     const costConfig = getOperationCost(operationType);
 
     if (!costConfig) {
-        console.warn(`⚠️ 未找到操作类型 '${operationType}' 的计费配置，返回 0`);
+        log.warn(`未找到操作类型 '${operationType}' 的计费配置，返回 0`);
         return 0;
     }
 

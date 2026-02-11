@@ -8,20 +8,22 @@
     import { toast } from "svelte-sonner";
     import { page } from "$app/stores";
     import { goto } from "$app/navigation";
-    import { Loader2 } from "lucide-svelte";
+    import { Loader2 } from "@lucide/svelte";
     import { recordVerificationEmailSent } from "$lib/utils/verification";
+    import { OAUTH_PROVIDER } from "$lib/config/constants";
+    import { getSafeRedirectUrl } from "$lib/utils/security";
 
     let loading = $state(false);
     let email = $state("");
     let password = $state("");
-    const returnTo = $derived($page.url.searchParams.get("returnTo"));
+    const returnTo = $derived(getSafeRedirectUrl($page.url.searchParams.get("returnTo")));
 
     async function handleGoogleSignIn() {
         loading = true;
         try {
             await authClient.signIn.social({
-                provider: "google",
-                callbackURL: returnTo || "/dashboard",
+                provider: OAUTH_PROVIDER.GOOGLE,
+                callbackURL: returnTo,
             });
         } catch (error) {
             loading = false;
@@ -41,7 +43,7 @@
             const result = await authClient.signIn.email({
                 email,
                 password,
-                callbackURL: returnTo || "/dashboard",
+                callbackURL: returnTo,
             });
             if (result.error) {
                 if (result.error.status === 403) {
@@ -68,7 +70,7 @@
                 }
                 loading = false;
             } else {
-                goto(returnTo || "/dashboard");
+                goto(returnTo);
             }
         } catch (error) {
             loading = false;

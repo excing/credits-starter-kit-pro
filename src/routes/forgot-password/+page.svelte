@@ -5,7 +5,7 @@
     import { Label } from "$lib/components/ui/label";
     import { authClient } from "$lib/auth-client";
     import { toast } from "svelte-sonner";
-    import { Loader2, ArrowLeft, Mail } from "lucide-svelte";
+    import { Loader2, ArrowLeft, Mail } from "@lucide/svelte";
 
     let loading = $state(false);
     let email = $state("");

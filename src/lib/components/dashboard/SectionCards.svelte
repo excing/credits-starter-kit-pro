@@ -6,17 +6,17 @@
         Activity,
         Coins,
         Package,
-    } from "lucide-svelte";
-    import { authState, statsState } from "$lib/stores/auth";
+    } from "@lucide/svelte";
+    import { authStore } from "$lib/stores/auth.svelte";
 
     // 积分数据在 initDashboardData 完成前为 undefined，以此判断是否还在加载
-    let creditsLoading = $derived($authState.user?.credits === undefined);
-    let statsLoading = $derived(!$statsState.loaded || $statsState.loading);
+    let creditsLoading = $derived(authStore.user?.credits === undefined);
+    let statsLoading = $derived(!authStore.statsLoaded || authStore.statsLoading);
 
     const cards = $derived([
         {
             title: "可用积分",
-            value: $authState.user?.credits?.toString() ?? "0",
+            value: authStore.user?.credits?.toString() ?? "0",
             change: "查看详情",
             trending: "up",
             icon: Coins,
@@ -25,7 +25,7 @@
         },
         {
             title: "有效套餐",
-            value: $authState.user?.activePackages?.toString() ?? "0",
+            value: authStore.user?.activePackages?.toString() ?? "0",
             change: "个套餐",
             trending: "neutral",
             icon: Package,
@@ -34,7 +34,7 @@
         },
         {
             title: "总消费",
-            value: $statsState.data?.totalSpent?.toString() ?? "0",
+            value: authStore.stats?.totalSpent?.toString() ?? "0",
             change: "积分",
             trending: "neutral",
             icon: Activity,
@@ -42,7 +42,7 @@
         },
         {
             title: "总获得",
-            value: $statsState.data?.totalEarned?.toString() ?? "0",
+            value: authStore.stats?.totalEarned?.toString() ?? "0",
             change: "积分",
             trending: "neutral",
             icon: TrendingUp,

@@ -7,7 +7,8 @@
     import { toast } from "svelte-sonner";
     import { page } from "$app/stores";
     import { goto } from "$app/navigation";
-    import { Loader2, CheckCircle } from "lucide-svelte";
+    import { Loader2, CheckCircle } from "@lucide/svelte";
+    import { AUTH } from "$lib/config/constants";
 
     let loading = $state(false);
     let password = $state("");
@@ -27,8 +28,8 @@
             toast.error("两次输入的密码不一致");
             return;
         }
-        if (password.length < 8) {
-            toast.error("密码长度至少为 8 位");
+        if (password.length < AUTH.PASSWORD_MIN_LENGTH) {
+            toast.error(`密码长度至少为 ${AUTH.PASSWORD_MIN_LENGTH} 位`);
             return;
         }
         if (!token) {

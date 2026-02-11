@@ -8,14 +8,16 @@
     import { toast } from "svelte-sonner";
     import { page } from "$app/stores";
     import { goto } from "$app/navigation";
-    import { Loader2 } from "lucide-svelte";
+    import { Loader2 } from "@lucide/svelte";
     import { recordVerificationEmailSent } from "$lib/utils/verification";
+    import { AUTH, OAUTH_PROVIDER } from "$lib/config/constants";
+    import { getSafeRedirectUrl } from "$lib/utils/security";
 
     let loading = $state(false);
     let email = $state("");
     let password = $state("");
     let confirmPassword = $state("");
-    const returnTo = $derived($page.url.searchParams.get("returnTo"));
+    const returnTo = $derived(getSafeRedirectUrl($page.url.searchParams.get("returnTo")));
 
     // 从邮箱提取默认姓名
     function getNameFromEmail(email: string): string {
@@ -28,8 +30,8 @@
         loading = true;
         try {
             await authClient.signIn.social({
-                provider: "google",
-                callbackURL: returnTo || "/dashboard",
+                provider: OAUTH_PROVIDER.GOOGLE,
+                callbackURL: returnTo,
             });
         } catch (error) {
             loading = false;
@@ -48,8 +50,8 @@
             toast.error("两次输入的密码不一致");
             return false;
         }
-        if (password.length < 8) {
-            toast.error("密码长度至少为 8 位");
+        if (password.length < AUTH.PASSWORD_MIN_LENGTH) {
+            toast.error(`密码长度至少为 ${AUTH.PASSWORD_MIN_LENGTH} 位`);
             return false;
         }
         return true;

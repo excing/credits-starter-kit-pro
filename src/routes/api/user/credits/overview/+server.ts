@@ -21,21 +21,21 @@ import {
 	getUserCreditStats,
 	calcBalanceFromPackages
 } from '$lib/server/credits';
-
-const HISTORY_LIMIT = 20;
+import { PAGINATION } from '$lib/config/constants';
+import { errorResponse, UnauthorizedError } from '$lib/server/errors';
 
 export const GET: RequestHandler = async ({ locals }) => {
 	const userId = locals.session?.user?.id;
 
 	if (!userId) {
-		return json({ error: '未授权' }, { status: 401 });
+		return errorResponse(new UnauthorizedError());
 	}
 
 	try {
-		const [activePackages, inactivePackages, transactions, debts, stats] = await Promise.all([
+		const [activePackages, inactivePackages, transactionsResult, debtsResult, stats] = await Promise.all([
 			getUserActivePackages(userId),
 			getUserInactivePackages(userId),
-			getUserTransactions(userId, HISTORY_LIMIT, 0),
+			getUserTransactions(userId, PAGINATION.DEFAULT_LIMIT, 0),
 			getUserDebts(userId, false),
 			getUserCreditStats(userId)
 		]);
@@ -44,15 +44,15 @@ export const GET: RequestHandler = async ({ locals }) => {
 			balance: calcBalanceFromPackages(activePackages),
 			activePackages: activePackages.length,
 			stats,
-			transactions,
+			transactions: transactionsResult.transactions,
+			transactionsTotal: transactionsResult.total,
 			packages: activePackages,
 			inactivePackages,
-			debts,
-			debtsTotal: debts.length,
-			debtsUnsettledCount: debts.filter((d) => !d.isSettled).length
+			debts: debtsResult.debts,
+			debtsTotal: debtsResult.total,
+			debtsUnsettledCount: debtsResult.debts.filter((d) => !d.isSettled).length
 		});
 	} catch (error) {
-		console.error('获取积分概览失败:', error);
-		return json({ error: '获取概览失败' }, { status: 500 });
+		return errorResponse(error, '获取概览失败');
 	}
 };

@@ -2,8 +2,8 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Package } from 'lucide-svelte';
-	import { adminStore } from '$lib/stores/admin.svelte';
+	import { Package } from '@lucide/svelte';
+	import { adminStore } from '$lib/stores/admin';
 	import PackageRow from './PackageRow.svelte';
 </script>
 

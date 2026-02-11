@@ -4,7 +4,8 @@
     import * as Avatar from "$lib/components/ui/avatar";
     import { cn } from "$lib/utils";
     import { Chat } from "@ai-sdk/svelte";
-    import { authState, afterCreditsConsumed } from "$lib/stores/auth";
+    import { authStore } from "$lib/stores/auth.svelte";
+    import { parseError, getErrorIcon, type ChatError } from "$lib/utils/chat-errors";
     import {
         AlertCircle,
         Send,
@@ -24,24 +25,12 @@
         ServerCrash,
         Brain,
         ChevronDown,
-    } from "lucide-svelte";
+    } from "@lucide/svelte";
     import { toast } from "svelte-sonner";
     import { goto } from "$app/navigation";
     import { tick, onMount } from "svelte";
     import { browser } from "$app/environment";
-
-    // 错误类型枚举
-    type ErrorType = 'insufficient_credits' | 'unauthorized' | 'rate_limit' | 'network' | 'server' | 'unknown';
-
-    interface ChatError {
-        type: ErrorType;
-        message: string;
-        retryable: boolean;
-        action?: {
-            label: string;
-            href?: string;
-        };
-    }
+    import { CREDITS, UI } from "$lib/config/constants";
 
     let input = $state("");
     let messagesContainer = $state<HTMLDivElement | null>(null);
@@ -57,72 +46,10 @@
     let isOnline = $state(true);
     let failedMessage = $state<string | null>(null);
 
-    // 解析错误类型
-    function parseError(error: Error | unknown): ChatError {
-        const err = error as any;
-        const status = err?.status || err?.response?.status;
-        const code = err?.code || err?.response?.data?.code;
-        const message = err?.message || err?.response?.data?.error || "";
-
-        // 积分不足
-        if (status === 402 || code === "INSUFFICIENT_CREDITS" || message.includes("积分不足")) {
-            return {
-                type: 'insufficient_credits',
-                message: "积分不足，请先充值",
-                retryable: false,
-                action: { label: "去充值", href: "/dashboard/credits" }
-            };
-        }
-
-        // 未授权
-        if (status === 401 || code === "UNAUTHORIZED" || message.includes("未授权")) {
-            return {
-                type: 'unauthorized',
-                message: "请先登录",
-                retryable: false,
-                action: { label: "去登录", href: "/sign-in" }
-            };
-        }
-
-        // 请求过于频繁
-        if (status === 429 || code === "RATE_LIMIT" || message.includes("频繁")) {
-            return {
-                type: 'rate_limit',
-                message: "请求过于频繁，请稍后再试",
-                retryable: true
-            };
-        }
-
-        // 网络错误
-        if (!isOnline || err?.name === "TypeError" || message.includes("network") || message.includes("fetch") || message.includes("Failed to fetch")) {
-            return {
-                type: 'network',
-                message: "网络连接失败，请检查网络",
-                retryable: true
-            };
-        }
-
-        // 服务器错误
-        if (status >= 500 || message.includes("服务器")) {
-            return {
-                type: 'server',
-                message: "服务器繁忙，请稍后再试",
-                retryable: true
-            };
-        }
-
-        // 未知错误
-        return {
-            type: 'unknown',
-            message: "发送失败，请重试",
-            retryable: true
-        };
-    }
-
     // 处理错误
     function handleError(error: Error | unknown) {
         console.error("Chat error:", error);
-        lastError = parseError(error);
+        lastError = parseError(error, isOnline);
 
         // 显示 toast 通知
         if (lastError.action?.href) {
@@ -151,7 +78,7 @@
             }
         } else if (!options.isAbort) {
             // 成功完成，刷新积分
-            afterCreditsConsumed();
+            authStore.afterCreditsConsumed();
         }
     }
 
@@ -195,25 +122,13 @@
         }
     });
 
-    // 获取错误图标
-    function getErrorIcon(type: ErrorType) {
-        switch (type) {
-            case 'insufficient_credits': return CreditCard;
-            case 'unauthorized': return LogIn;
-            case 'rate_limit': return Clock;
-            case 'network': return WifiOff;
-            case 'server': return ServerCrash;
-            default: return AlertCircle;
-        }
-    }
-
     // 检测是否滚动到底部
     function checkScrollPosition() {
         if (!messagesContainer) return;
         const { scrollTop, scrollHeight, clientHeight } = messagesContainer;
         const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-        if (distanceFromBottom <= 100) {
+        if (distanceFromBottom <= UI.CHAT_SCROLL_THRESHOLD) {
             shouldAutoScroll = true;
             showScrollButton = false;
         } else {
@@ -238,8 +153,9 @@
     // 监听消息变化，自动滚动
     $effect(() => {
         const messageCount = chat.messages.length;
-        const lastContent = lastMessage?.parts?.[0]?.type === "text"
-            ? (lastMessage.parts[0] as any).text
+        const firstPart = lastMessage?.parts?.[0];
+        const lastContent = firstPart?.type === "text"
+            ? (firstPart as { type: "text"; text: string }).text
             : "";
 
         if (messageCount > 0 && shouldAutoScroll) {
@@ -251,7 +167,7 @@
     function autoResize() {
         if (textareaRef) {
             textareaRef.style.height = "auto";
-            textareaRef.style.height = Math.min(textareaRef.scrollHeight, 200) + "px";
+            textareaRef.style.height = Math.min(textareaRef.scrollHeight, UI.TEXTAREA_MAX_HEIGHT) + "px";
         }
     }
 
@@ -342,12 +258,12 @@
     {/if}
 
     <!-- 积分余额警告 -->
-    {#if isOnline && $authState.user?.credits !== undefined && $authState.user.credits < 10}
+    {#if isOnline && authStore.user?.credits !== undefined && authStore.user.credits < CREDITS.LOW_BALANCE_WARNING}
         <div class="border-b border-yellow-200 bg-yellow-50 px-4 py-2 dark:border-yellow-800 dark:bg-yellow-900/20">
             <div class="mx-auto flex max-w-3xl items-center gap-2 text-sm">
                 <AlertCircle class="h-4 w-4 flex-shrink-0 text-yellow-600 dark:text-yellow-400" />
                 <span class="text-yellow-800 dark:text-yellow-200">
-                    积分余额不足 ({$authState.user.credits} 积分)
+                    积分余额不足 ({authStore.user?.credits} 积分)
                 </span>
                 <a
                     href="/dashboard/credits"
@@ -407,14 +323,14 @@
                         <!-- 头像 -->
                         {#if message.role === "user"}
                             <Avatar.Root class="h-8 w-8 flex-shrink-0">
-                                {#if $authState.user?.image}
+                                {#if authStore.user?.image}
                                     <Avatar.Image
-                                        src={$authState.user.image}
-                                        alt={$authState.user.name || "用户"}
+                                        src={authStore.user.image}
+                                        alt={authStore.user.name || "用户"}
                                     />
                                 {/if}
                                 <Avatar.Fallback class="bg-primary text-primary-foreground text-xs">
-                                    {getInitials($authState.user?.name)}
+                                    {getInitials(authStore.user?.name)}
                                 </Avatar.Fallback>
                             </Avatar.Root>
                         {:else}

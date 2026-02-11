@@ -2,8 +2,8 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Edit, Trash2, Loader2 } from 'lucide-svelte';
-	import { adminStore, type CreditPackage } from '$lib/stores/admin.svelte';
+	import { Edit, Trash2, Loader2 } from '@lucide/svelte';
+	import { adminStore, type CreditPackage } from '$lib/stores/admin';
 
 	interface Props {
 		pkg: CreditPackage;

@@ -4,6 +4,15 @@ import {
     getUserBalance,
 } from './credits';
 import { json } from '@sveltejs/kit';
+import { randomUUID } from 'crypto';
+import { CREDITS } from '$lib/config/constants';
+import { db } from './db';
+import { user } from './db/schema';
+import { eq } from 'drizzle-orm';
+import { sendLowBalanceEmail } from './email';
+import { createLogger } from './logger';
+
+const log = createLogger('credits-middleware');
 
 // ============================================================================
 // 类型定义
@@ -38,6 +47,8 @@ export interface CreditContext {
     operationType: string;
     /** 用户的初始积分余额（前置检查时的余额） */
     initialBalance: number;
+    /** 操作唯一标识（幂等性 + batch 关联） */
+    operationId: string;
 }
 
 // ============================================================================
@@ -98,7 +109,8 @@ export async function preCheckCredits(
             context: {
                 userId,
                 operationType: options.operationType,
-                initialBalance: 0
+                initialBalance: 0,
+                operationId: randomUUID()
             }
         };
     }
@@ -127,7 +139,8 @@ export async function preCheckCredits(
         context: {
             userId,
             operationType: options.operationType,
-            initialBalance: balance
+            initialBalance: balance,
+            operationId: randomUUID()
         }
     };
 }
@@ -185,11 +198,11 @@ export async function postDeductCredits(
     creditsToDeduct: number,
     metadata?: Record<string, any>
 ): Promise<void> {
-    const { userId, operationType } = context;
+    const { userId, operationType, operationId } = context;
 
     // 如果没有费用，跳过扣费
     if (creditsToDeduct <= 0) {
-        console.log(`⚠️ 用户 ${userId} 的操作 '${operationType}' 没有费用，跳过扣费`);
+        log.info('跳过扣费: 无费用', { userId, operationType });
         return;
     }
 
@@ -198,15 +211,40 @@ export async function postDeductCredits(
         await deductCredits(userId, creditsToDeduct, operationType, {
             ...metadata,
             creditsDeducted: creditsToDeduct
-        });
+        }, operationId);
 
-        console.log(
-            `✓ 用户 ${userId} 消费 ${creditsToDeduct} 积分 (操作: ${operationType})`
-        );
+        log.info('扣费成功', { userId, creditsToDeduct, operationType, operationId });
+
+        // 低余额通知：仅在余额从高于阈值变为低于阈值时触发
+        const afterBalance = context.initialBalance - creditsToDeduct;
+        if (
+            context.initialBalance >= CREDITS.LOW_BALANCE_WARNING &&
+            afterBalance < CREDITS.LOW_BALANCE_WARNING
+        ) {
+            notifyLowBalance(userId, afterBalance).catch((err: unknown) =>
+                log.error('低余额通知发送失败', err instanceof Error ? err : new Error(String(err)))
+            );
+        }
     } catch (error) {
-        console.error('扣费失败:', error);
+        log.error('扣费失败', error instanceof Error ? error : new Error(String(error)));
         // 记录失败但不影响用户体验（已经完成的操作不应该回滚）
     }
+}
+
+/**
+ * 发送低余额邮件通知（异步，不阻塞主流程）
+ */
+async function notifyLowBalance(userId: string, balance: number): Promise<void> {
+    const [userData] = await db
+        .select({ email: user.email, name: user.name })
+        .from(user)
+        .where(eq(user.id, userId))
+        .limit(1);
+
+    if (!userData?.email) return;
+
+    await sendLowBalanceEmail(userData.email, userData.name || '', balance);
+    log.info('已发送低余额通知', { email: userData.email, balance });
 }
 
 /**
@@ -514,7 +552,7 @@ export function withCreditsStreaming(
             metadata?: Record<string, any>
         ): Promise<void> => {
             if (options.skipPostDeduct) {
-                console.log(`⚠️ skipPostDeduct 已启用，跳过扣费`);
+                log.info('skipPostDeduct 已启用，跳过扣费');
                 return;
             }
 

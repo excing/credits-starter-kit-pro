@@ -4,21 +4,22 @@ import { db } from '$lib/server/db';
 import { redemptionHistory, redemptionCode, creditPackage, user } from '$lib/server/db/schema';
 import { isAdmin } from '$lib/server/auth-utils';
 import { desc, eq, count } from 'drizzle-orm';
+import { parsePagination } from '$lib/config/constants';
+import { errorResponse, ForbiddenError } from '$lib/server/errors';
 
 /**
  * 管理员查看兑换历史记录
- * GET /api/admin/credits/codes/history?limit=50&offset=0
+ * GET /api/admin/credits/codes/history?limit=30&offset=0
  */
 export const GET: RequestHandler = async ({ locals, url }) => {
 	const userEmail = locals.session?.user?.email;
 
 	if (!isAdmin(userEmail)) {
-		return json({ error: '需要管理员权限' }, { status: 403 });
+		return errorResponse(new ForbiddenError());
 	}
 
 	try {
-		const limit = parseInt(url.searchParams.get('limit') || '50');
-		const offset = parseInt(url.searchParams.get('offset') || '0');
+		const { limit, offset } = parsePagination(url);
 
 		// 获取兑换历史列表和总数
 		const [history, totalCount] = await Promise.all([
@@ -70,7 +71,6 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 			offset
 		});
 	} catch (error) {
-		console.error('获取兑换历史失败:', error);
-		return json({ error: '获取失败' }, { status: 500 });
+		return errorResponse(error, '获取失败');
 	}
 };

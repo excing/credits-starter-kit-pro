@@ -3,10 +3,9 @@
     import * as Avatar from "$lib/components/ui/avatar";
     import { authClient } from "$lib/auth-client";
 	    import { browser } from "$app/environment";
-    import { Loader2 } from "lucide-svelte";
+    import { Loader2 } from "@lucide/svelte";
     import { goto } from "$app/navigation";
-	    import type { AuthUser } from "$lib/stores/auth";
-	    import { authState, clearAuthState } from "$lib/stores/auth";
+	    import { type AuthUser, authStore } from "$lib/stores/auth.svelte";
 
 	    type UserInfo = AuthUser;
 
@@ -16,12 +15,12 @@
 
     let { mini = false }: Props = $props();
 
-	    let userInfo = $derived($authState.user as UserInfo | null);
-	    let loading = $derived(!$authState.loaded);
+	    let userInfo = $derived(authStore.user as UserInfo | null);
+	    let loading = $derived(!authStore.loaded);
     let error = $state<string | null>(null);
 
 	    $effect(() => {
-	        if (browser && $authState.loaded && !$authState.user) {
+	        if (browser && authStore.loaded && !authStore.user) {
 	            goto("/sign-in");
 	        }
 	    });
@@ -32,7 +31,7 @@
 	            await authClient.signOut({
 	                fetchOptions: {
 	                    onSuccess: () => {
-	                        clearAuthState();
+	                        authStore.clearAuthState();
 	                        goto("/sign-in");
 	                    },
 	                },

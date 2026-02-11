@@ -2,9 +2,11 @@ import {
     boolean,
     integer,
     bigint,
+    index,
     pgTable,
     text,
     timestamp,
+    jsonb,
 } from 'drizzle-orm/pg-core';
 
 // Better Auth Tables
@@ -15,7 +17,8 @@ export const user = pgTable('user', {
     emailVerified: boolean('emailVerified').notNull().default(false),
     image: text('image'),
     createdAt: timestamp('createdAt').notNull().defaultNow(),
-    updatedAt: timestamp('updatedAt').notNull().defaultNow()
+    updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+    deletedAt: timestamp('deletedAt')
 });
 
 export const session = pgTable('session', {
@@ -63,7 +66,9 @@ export const rateLimit = pgTable("rate_limit", {
     key: text("key"),
     count: integer("count"),
     lastRequest: bigint("last_request", { mode: "number" }),
-});
+}, (table) => [
+    index('idx_rate_limit_key').on(table.key),
+]);
 
 // Credits System Tables
 
@@ -80,7 +85,8 @@ export const creditPackage = pgTable('credit_package', {
     isActive: boolean('is_active').notNull().default(true),
     metadata: text('metadata'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow()
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at')
 });
 
 // 2. User Credit Package - 用户拥有的积分套餐表
@@ -90,6 +96,8 @@ export const userCreditPackage = pgTable('user_credit_package', {
         .references(() => user.id, { onDelete: 'cascade' }),
     packageId: text('package_id').notNull()
         .references(() => creditPackage.id, { onDelete: 'cascade' }),
+    // 套餐快照：记录购买/兑换时的套餐信息，不受后续套餐修改影响
+    packageName: text('package_name').notNull(),
     creditsTotal: integer('credits_total').notNull(),
     creditsRemaining: integer('credits_remaining').notNull(),
     grantedAt: timestamp('granted_at').notNull().defaultNow(),
@@ -114,8 +122,12 @@ export const creditTransaction = pgTable('credit_transaction', {
     description: text('description'),
     metadata: text('metadata'),
     relatedId: text('related_id'),
+    operationId: text('operation_id'),
     createdAt: timestamp('created_at').notNull().defaultNow()
-});
+}, (table) => [
+    index('idx_credit_transaction_operation_id').on(table.operationId),
+    index('idx_credit_transaction_user_created').on(table.userId, table.createdAt),
+]);
 
 // 5. Redemption Code - 兑换码表
 export const redemptionCode = pgTable('redemption_code', {
@@ -128,7 +140,8 @@ export const redemptionCode = pgTable('redemption_code', {
     isActive: boolean('is_active').notNull().default(true),
     createdBy: text('created_by'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow()
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at')
 });
 
 // 6. Redemption History - 兑换历史表
@@ -161,4 +174,6 @@ export const creditDebt = pgTable('credit_debt', {
     settledTransactionId: text('settled_transaction_id'), // 结清交易ID
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow()
-});
+}, (table) => [
+    index('idx_credit_debt_user_settled').on(table.userId, table.isSettled),
+]);
